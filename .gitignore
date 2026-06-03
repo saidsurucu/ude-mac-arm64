@@ -1,0 +1,17 @@
+# Üretilen .app ve indirilen kaynak paket (build.sh yeniden üretir)
+/build/
+/downloads/
+
+# vendor bağımlılıkları build.sh 'deps' ile indirilir
+/vendor/*.jar
+
+# macOS
+.DS_Store
+._*
+
+# README hariç tüm markdown dosyaları
+*.md
+!README.md
+
+# proje dışı (harness cache)
+/cache/

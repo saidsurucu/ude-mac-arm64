@@ -1,0 +1,89 @@
+name: Release (arm64 .app)
+
+# Elle tetiklenir. macOS arm64 runner'da native .app üretir, sürümü UDE
+# sürümünden (CFBundleVersion) türetir: <ude_surumu>_<N>  (ör. 5.4.17_1).
+# <N> her yeniden yayında otomatik artar (aynı UDE sürümü için).
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Revizyon numarası (boşsa otomatik = mevcut + 1)'
+        required: false
+      ude_url:
+        description: 'UDE paket URL (boşsa build.sh varsayılanı)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14   # Apple Silicon (arm64) runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mimari doğrula (arm64 olmalı)
+        run: test "$(uname -m)" = "arm64" || { echo "Runner arm64 değil!"; exit 1; }
+
+      - name: arm64 JDK 8 kur (Azul Zulu)
+        run: make jdk
+
+      - name: Native arm64 .app üret
+        env:
+          UDE_URL: ${{ github.event.inputs.ude_url }}
+        run: make all
+
+      - name: Sürümü belirle (<ude_surumu>_<N>)
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REV: ${{ github.event.inputs.revision }}
+        run: |
+          UDE_VER=$(plutil -extract CFBundleVersion raw "build/Uyap Doküman Editörü.app/Contents/Info.plist")
+          echo "UDE sürümü: $UDE_VER"
+          if [ -n "$INPUT_REV" ]; then
+            REV="$INPUT_REV"
+          else
+            # Mevcut '<UDE_VER>_*' release'lerinden en büyük N'i bulup +1
+            LAST=$(gh api "repos/${{ github.repository }}/releases" --paginate --jq '.[].tag_name' 2>/dev/null \
+              | grep "^${UDE_VER}_" | sed "s/^${UDE_VER}_//" | sort -n | tail -1)
+            REV=$(( ${LAST:-0} + 1 ))
+          fi
+          TAG="${UDE_VER}_${REV}"
+          echo "Yayın etiketi: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: .app'i zip'le (ditto — imza/symlink korunur)
+        run: |
+          cd build
+          ditto -c -k --sequesterRsrc --keepParent \
+            "Uyap Doküman Editörü.app" \
+            "$GITHUB_WORKSPACE/UyapDokumanEditoru-${{ steps.ver.outputs.tag }}-arm64.zip"
+
+      - name: Build çıktısını doğrula
+        run: codesign --verify --verbose "build/Uyap Doküman Editörü.app"
+
+      - name: GitHub Release oluştur + dosyayı ekle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          files: UyapDokumanEditoru-${{ steps.ver.outputs.tag }}-arm64.zip
+          body: |
+            Native Apple Silicon (arm64) UDE build — Rosetta gerektirmez.
+
+            ## Kurulum
+            1. Aşağıdaki **zip'i indirip** çift tıklayarak **açın** (içinden `Uyap Doküman Editörü.app` çıkar).
+            2. Çıkan uygulamayı **Uygulamalar (Applications) klasörüne sürükleyin**.
+            3. İlk açılışta macOS **"uygulama açılamıyor / hasarlı / geliştirici doğrulanamadı"** diyebilir.
+               Bunu bir kez aşmak için:
+               1. **Terminal** uygulamasını açın: `Command (⌘) + Boşluk`'a basın, **Terminal** yazıp **Enter**'a basın.
+               2. Şu satırı kopyalayın, Terminal'e yapıştırıp **Enter**'a basın:
+                  ```
+                  xattr -dr com.apple.quarantine "/Applications/Uyap Doküman Editörü.app"
+                  ```
+               3. Komut bir şey yazmadan biter (normaldir). Artık uygulamayı çift tıklayarak açabilirsiniz.
+
+            ## Gereksinim
+            - **arm64 JDK 8** (ör. Azul Zulu 8 / Liberica 8 aarch64).
+            - E-imza için ayrıca **arm64 PKCS#11 token middleware** (AKİS vb.).
