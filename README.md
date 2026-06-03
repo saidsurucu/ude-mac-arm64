@@ -110,3 +110,11 @@ UDE_URL="https://rayp.adalet.gov.tr/.../yeni-paket.zip" make all
 `.github/workflows/release.yml` (elle tetiklenir): macOS arm64 runner'da `make all`
 çalıştırır, `.app`'i imzayı bozmadan zip'ler ve **Release**'e ekler. Sürüm,
 UDE sürümünden türetilir: `<ude_surumu>_<N>` (ör. `5.4.17_1`).
+
+---
+
+## Teşekkür
+
+Bu çalışmaya ilham veren ve sorunun çözüm yolunu ortaya koyan
+[**tosbaha**](https://github.com/tosbaha) kullanıcısına ([tosbaha/uyap-arm](https://github.com/tosbaha/uyap-arm))
+teşekkürler.
