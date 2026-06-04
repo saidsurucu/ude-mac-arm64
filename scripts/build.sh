@@ -26,6 +26,8 @@ VENDOR="$ROOT/vendor"
 DOWNLOADS="$ROOT/downloads"
 SRC_APP_DIR="$BUILD/_src"
 SHIM_SRC="$SCRIPT_DIR/eawt-shim"
+ICONS_SRC="$SCRIPT_DIR/icons"
+ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -75,6 +77,16 @@ find_jpackage() {
 javac17() {  # jpackage JDK'sının javac'ı (shim'i --release 11 derler)
 	local jp; jp="$(find_jpackage)" || return 1
 	echo "$(dirname "$jp")/javac"
+}
+java17() {  # jpackage JDK'sının java'sı (build-time patcher'ları çalıştırır)
+	local jp; jp="$(find_jpackage)" || return 1
+	echo "$(dirname "$jp")/java"
+}
+icon_deps() {  # Javassist (build-time ikon yükleyici yaması için)
+	mkdir -p "$SCRIPT_DIR/lib"
+	local jvs="$SCRIPT_DIR/lib/javassist-3.30.2-GA.jar"
+	[ -s "$jvs" ] || curl -fsSL -o "$jvs" https://repo1.maven.org/maven2/org/javassist/javassist/3.30.2-GA/javassist-3.30.2-GA.jar || die "javassist indirilemedi."
+	echo "$jvs"
 }
 
 install_zulu() {  # $1=java_version  $2=hedef .jdk
@@ -152,6 +164,24 @@ shim() {
 	c_ok "eawt-shim derlendi ($(find "$BUILD/_shim" -name '*.class' | wc -l | tr -d ' ') sınıf)"
 }
 
+apply_icons() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ -z "$ICONS" ] && return 0
+	c_info "[icons] modern ikon override + HiDPI yükleyici yaması…"
+	# 1) override asset'leri jar'a enjekte et (UDE resource yoluyla)
+	if [ -d "$ICONS_SRC/overrides" ] && [ -n "$(find "$ICONS_SRC/overrides" -type f ! -name '.*' 2>/dev/null)" ]; then
+		( cd "$ICONS_SRC/overrides" && zip -q -r "$JAR" . -x '.*' )
+		c_ok "[icons] override asset'leri enjekte edildi ($(find "$ICONS_SRC/overrides" -name '*.png' | wc -l | tr -d ' ') png)."
+	fi
+	# 2) Utils.b(String) yükleyicisini multi-resolution'a çevir (Javassist)
+	local jvs jc jr; jvs="$(icon_deps)"; jc="$(javac17)" || die "[icons] javac yok"; jr="$(java17)" || die "[icons] java yok"
+	rm -rf "$BUILD/_iconpatch"; mkdir -p "$BUILD/_iconpatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_iconpatch" "$ICONS_SRC/IconLoaderPatch.java" || die "[icons] patcher derlenemedi."
+	"$jr" -cp "$BUILD/_iconpatch:$jvs" IconLoaderPatch "$JAR" "$BUILD/_iconpatch/out" || die "[icons] patcher çalışmadı."
+	( cd "$BUILD/_iconpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[icons] Utils.b multi-resolution yaması uygulandı."
+}
+
 patch_jar() {
 	local JAR="$SRC_APP_DIR/app/Contents/Java/editor-app.jar"
 	[ -s "$JAR" ] || die "Önce 'download' çalıştır."
@@ -165,6 +195,7 @@ patch_jar() {
 	rm -rf "$stage"
 	# Gömülü (Java 8 native-bağımlı) com.apple.eawt/eio sınıflarını çıkar (shim sağlayacak)
 	zip -q -d "$JAR" 'com/apple/eawt/*' 'com/apple/eio/*' >/dev/null 2>&1 || true
+	apply_icons "$JAR"
 	unzip -l "$JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
 	c_ok "jar yamalandı (sqlite 3.46 + eawt çıkarıldı)"
@@ -256,12 +287,13 @@ Hedefler:
   clean / distclean
 
 Ortam: UDE_URL / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
+       ICONS (boş|1; modern ikon override + HiDPI yükleyici yaması)
 EOF
 }
 
 case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
-	download) download ;; deps) deps ;; shim) shim ;; patch) patch_jar ;;
+	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; patch) patch_jar ;;
 	package) package ;; sign) sign ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
 	*) die "Bilinmeyen hedef: $1  (scripts/build.sh help)" ;;
