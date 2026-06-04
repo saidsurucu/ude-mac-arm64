@@ -25,8 +25,11 @@ jobs:
       - name: Mimari doğrula (arm64 olmalı)
         run: test "$(uname -m)" = "arm64" || { echo "Runner arm64 değil!"; exit 1; }
 
-      - name: arm64 JDK 8 kur (Azul Zulu)
+      - name: Gömülecek arm64 Java 8 kur (Azul Zulu)
         run: make jdk
+
+      - name: jpackage'lı 17+ JDK hazırla
+        run: make jpackage-jdk
 
       - name: Native arm64 .app üret
         env:
@@ -71,12 +74,12 @@ jobs:
           files: UyapDokumanEditoru-${{ steps.ver.outputs.tag }}-arm64.zip
           body: |
             Native Apple Silicon (arm64) UDE build — Rosetta gerektirmez.
+            Java gömülü gelir; ayrıca bir şey kurmaya gerek yok. `.udf` dosyalarına çift tıklayıp açabilirsiniz.
 
             ## Kurulum
             1. Aşağıdaki **zip'i indirip** çift tıklayarak **açın** (içinden `Uyap Doküman Editörü.app` çıkar).
             2. Çıkan uygulamayı **Uygulamalar (Applications) klasörüne sürükleyin**.
-            3. İlk açılışta macOS **"uygulama açılamıyor / hasarlı / geliştirici doğrulanamadı"** diyebilir.
-               Bunu bir kez aşmak için:
+            3. İlk açılışta macOS **"geliştirici doğrulanamadı"** diyebilir. Bunu bir kez aşmak için:
                1. **Terminal** uygulamasını açın: `Command (⌘) + Boşluk`'a basın, **Terminal** yazıp **Enter**'a basın.
                2. Şu satırı kopyalayın, Terminal'e yapıştırıp **Enter**'a basın:
                   ```
@@ -84,6 +87,6 @@ jobs:
                   ```
                3. Komut bir şey yazmadan biter (normaldir). Artık uygulamayı çift tıklayarak açabilirsiniz.
 
-            ## Gereksinim
-            - **arm64 JDK 8** (ör. Azul Zulu 8 / Liberica 8 aarch64).
-            - E-imza için ayrıca **arm64 PKCS#11 token middleware** (AKİS vb.).
+            ## Not
+            - E-imza için sistemde ayrıca **arm64 PKCS#11 token middleware** (AKİS vb.) kurulu olmalıdır.
+            - ⚠️ E-imza henüz gerçek kartla test edilmedi.

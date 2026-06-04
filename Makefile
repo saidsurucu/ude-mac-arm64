@@ -1,31 +1,33 @@
 # UDE (Uyap Doküman Editörü) — native Apple Silicon (arm64) build
-# Asıl mantık scripts/build.sh içinde (boşluk/Türkçe karakterli .app adı Make'te sorunlu).
-# Bu Makefile ince bir sarmalayıcıdır.
+# Asıl mantık scripts/build.sh içinde. Bu Makefile ince bir sarmalayıcıdır.
 
 SH := bash scripts/build.sh
 
-.PHONY: all check-deps jdk download deps launcher patch sign clean distclean help
+.PHONY: all check-deps jdk jpackage-jdk download deps patch package sign clean distclean help
 
 all: ## ARM64 .app'i üret (varsayılan)
 	@$(SH) all
 
-check-deps: ## Araçları ve arm64 JDK 8'i denetle
+check-deps: ## Araçları, arm64 Java 8 ve jpackage'ı denetle
 	@$(SH) check-deps
 
-jdk: ## arm64 JDK 8 yoksa Azul Zulu 8 kur
+jdk: ## Gömülecek arm64 Java 8 yoksa Azul Zulu 8 kur
 	@$(SH) jdk
 
-download: ## Kaynak paketi indir ve build/'e aç
+jpackage-jdk: ## jpackage'lı 17+ JDK yoksa Azul Zulu 21 kur
+	@$(SH) jpackage-jdk
+
+download: ## Kaynak paketi indir ve aç
 	@$(SH) download
 
 deps: ## sqlite-jdbc'yi indir + arm64 dylib doğrula
 	@$(SH) deps
 
-launcher: ## arm64 launcher'ı bundle'a kur
-	@$(SH) launcher
-
 patch: ## editor-app.jar içinde sqlite swap
 	@$(SH) patch
+
+package: ## jpackage ile .app üret (.udf ilişkilendirmeli, JRE gömülü)
+	@$(SH) package
 
 sign: ## ad-hoc codesign
 	@$(SH) sign
