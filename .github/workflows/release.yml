@@ -25,7 +25,7 @@ jobs:
       - name: Mimari doğrula (arm64 olmalı)
         run: test "$(uname -m)" = "arm64" || { echo "Runner arm64 değil!"; exit 1; }
 
-      - name: Gömülecek arm64 Java 8 kur (Azul Zulu)
+      - name: Gömülecek arm64 Java 11 kur (Azul Zulu)
         run: make jdk
 
       - name: jpackage'lı 17+ JDK hazırla
