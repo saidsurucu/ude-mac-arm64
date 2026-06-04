@@ -52,7 +52,14 @@ c_warn() { printf '\033[33m!\033[0m %s\n' "$*"; }
 c_err()  { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; }
 die()    { c_err "$*"; exit 1; }
 
-arm8_home()  { /usr/libexec/java_home -v 1.8 -a arm64 2>/dev/null || true; }
+# NOT: bazı sistemlerde (ör. GitHub runner) `java_home -v 1.8` Java 8 yoksa
+# en yeni JDK'yı döndürebiliyor → gerçekten 1.8 olduğunu doğrula.
+arm8_home() {
+	if [ -x "$JDK8_DEST/Contents/Home/bin/java" ]; then echo "$JDK8_DEST/Contents/Home"; return 0; fi
+	local h; h="$(/usr/libexec/java_home -v 1.8 -a arm64 2>/dev/null || true)"
+	if [ -n "$h" ] && "$h/bin/java" -version 2>&1 | grep -q 'version "1\.8'; then echo "$h"; fi
+	return 0
+}
 
 find_jpackage() {
 	local v jh
