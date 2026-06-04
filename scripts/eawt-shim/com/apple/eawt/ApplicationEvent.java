@@ -1,0 +1,1 @@
+package com.apple.eawt; public class ApplicationEvent extends java.util.EventObject { public ApplicationEvent(){ super(new Object()); } private boolean handled; private String filename; public void setHandled(boolean h){ this.handled=h; } public boolean isHandled(){ return handled; } public String getFilename(){ return filename; } public Object getSource(){ return ""; } }

@@ -1,0 +1,1 @@
+package com.apple.eawt; public interface FullScreenListener extends java.util.EventListener { void windowEnteringFullScreen(AppEvent.FullScreenEvent e); void windowEnteredFullScreen(AppEvent.FullScreenEvent e); void windowExitingFullScreen(AppEvent.FullScreenEvent e); void windowExitedFullScreen(AppEvent.FullScreenEvent e); }

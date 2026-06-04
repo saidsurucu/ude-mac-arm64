@@ -2,35 +2,34 @@
 #
 # build.sh — UDE (Uyap Doküman Editörü) için native Apple Silicon (arm64) .app üretir.
 #
-# Yaklaşım: jpackage ile, arm64 Java 8 JRE'yi GÖMEREK gerçek bir native launcher'lı
-# .app paketlenir. Böylece:
-#   - Son kullanıcı ayrıca Java kurmak zorunda kalmaz (JRE gömülü).
-#   - macOS dosya ilişkilendirmesi/çift-tık çalışır (script launcher'ın aksine,
-#     native launcher "dosya aç" Apple Event'ini JVM'e iletir).
+# Yaklaşım: jpackage ile arm64 **Java 11** runtime'ı GÖMÜLEREK paketlenir.
+#   - Java 11 = otomatik HiDPI (JEP 263) → Retina'da KESKİN metin.
+#   - Java 8'de arm64 Swing Retina render etmiyordu (bulanık); Java 11 çözer.
+#   - UDE Java 8 bytecode'u Java 11'de çalışır (WebLaF illegal-access uyarıyla geçer).
+#   - UDE'nin kullandığı eski `com.apple.eawt` API'si Java 11'de kaldırıldı → küçük bir
+#     "eawt-shim" (scripts/eawt-shim) ile sağlanır; dosya-açma Java 11'in native
+#     dispatcher'ına reflection ile köprülenir → çift-tık ile .udf açma korunur.
 #
 # Engeller ve çözümleri (detay: claudedocs/ARM-derleme-plani.md):
 #   1) x64 launcher        -> jpackage native arm64 launcher (in-process JVM)
-#   2) JNA (kullanılmıyor)  -> dokunulmaz
-#   3) sqlite-jdbc 3.7.2    -> 3.46.x ile değiştirilir (arm64 dylib içerir)
-#   + .udf dosya ilişkilendirmesi + ad-hoc codesign
-#
-# Kullanım:  scripts/build.sh <hedef>      (hedefsiz = all)
+#   2) Java 8 Retina yok    -> Java 11 runtime gömülür
+#   3) com.apple.eawt yok   -> eawt-shim (--patch-module java.desktop)
+#   4) sqlite-jdbc 3.7.2    -> 3.46.x (arm64 dylib)
+#   + ASCII executable adı (codesign Türkçe karakterle bozuluyor) + ad-hoc imza
 #
 set -euo pipefail
 
-# ----- Yollar & sabitler -----
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD="$ROOT/build"
 VENDOR="$ROOT/vendor"
 DOWNLOADS="$ROOT/downloads"
-SRC_APP_DIR="$BUILD/_src"           # kaynak .app (jar + kaynaklar) buraya açılır
+SRC_APP_DIR="$BUILD/_src"
+SHIM_SRC="$SCRIPT_DIR/eawt-shim"
 
-APP_NAME="Uyap Doküman Editörü"     # kullanıcıya görünen ad (.app klasörü + display name)
+APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
-ASCII_NAME="UyapDokumanEditoru"     # jpackage'a verilen ASCII ad (executable/CFBundleExecutable)
-                                    # NOT: macOS codesign, app adındaki Türkçe karakterlerle
-                                    # imzayı bozuyor → executable ASCII, görünen ad sonradan Türkçe.
+ASCII_NAME="UyapDokumanEditoru"     # executable/CFBundleExecutable (ASCII şart, codesign)
 BUNDLE_ID="tr.gov.uyap.editor"
 MAIN_CLASS="tr.com.havelsan.uyap.system.editor.common.WPAppManager"
 
@@ -41,9 +40,9 @@ SQLITE_VER="${SQLITE_VER:-3.46.1.3}"
 SQLITE_JAR="$VENDOR/sqlite-jdbc-$SQLITE_VER.jar"
 SQLITE_URL="https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/$SQLITE_VER/sqlite-jdbc-$SQLITE_VER.jar"
 
-# Gömülecek arm64 Java 8 JRE (runtime). 'jdk' hedefi Azul Zulu 8'i kurar.
-JDK8_DEST="$HOME/Library/Java/JavaVirtualMachines/zulu-8-arm64.jdk"
-# jpackage için 17+ JDK (build zamanı aracı). 'jpackage-jdk' hedefi Zulu 21 kurar.
+# Gömülecek arm64 Java 11 (runtime). 'jdk' hedefi Azul Zulu 11'i kurar.
+JDK11_DEST="$HOME/Library/Java/JavaVirtualMachines/zulu-11-arm64.jdk"
+# jpackage + shim derlemesi için 17+ JDK. 'jpackage-jdk' Zulu 21 kurar.
 JDK21_DEST="$HOME/Library/Java/JavaVirtualMachines/zulu-21-arm64.jdk"
 
 c_ok()   { printf '\033[32m✓\033[0m %s\n' "$*"; }
@@ -52,14 +51,14 @@ c_warn() { printf '\033[33m!\033[0m %s\n' "$*"; }
 c_err()  { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; }
 die()    { c_err "$*"; exit 1; }
 
-# NOT: bazı sistemlerde (ör. GitHub runner) `java_home -v 1.8` Java 8 yoksa
-# en yeni JDK'yı döndürebiliyor → gerçekten 1.8 olduğunu doğrula.
-arm8_home() {
-	if [ -x "$JDK8_DEST/Contents/Home/bin/java" ]; then echo "$JDK8_DEST/Contents/Home"; return 0; fi
-	local h; h="$(/usr/libexec/java_home -v 1.8 -a arm64 2>/dev/null || true)"
-	if [ -n "$h" ] && "$h/bin/java" -version 2>&1 | grep -q 'version "1\.8'; then echo "$h"; fi
+# Gerçekten istenen major sürüm mü (java_home yanlış sürüm döndürebiliyor)
+jhome() {  # $1=major  $2=hedef .jdk
+	if [ -x "$2/Contents/Home/bin/java" ]; then echo "$2/Contents/Home"; return 0; fi
+	local h; h="$(/usr/libexec/java_home -v "$1" -a arm64 2>/dev/null || true)"
+	if [ -n "$h" ] && "$h/bin/java" -version 2>&1 | grep -q "version \"$1"; then echo "$h"; fi
 	return 0
 }
+jdk11_home() { jhome 11 "$JDK11_DEST"; }
 
 find_jpackage() {
 	local v jh
@@ -73,21 +72,24 @@ find_jpackage() {
 	done
 	return 1
 }
+javac17() {  # jpackage JDK'sının javac'ı (shim'i --release 11 derler)
+	local jp; jp="$(find_jpackage)" || return 1
+	echo "$(dirname "$jp")/javac"
+}
 
-# Azul Zulu (aarch64) tar.gz indir + ~/Library/Java/...'ya kur
-install_zulu() {  # $1=java_version  $2=hedef .jdk yolu
-	local jv="$1" dest="$2"
-	c_info "Azul Zulu $jv (aarch64) indiriliyor…"
+install_zulu() {  # $1=java_version  $2=hedef .jdk
+	c_info "Azul Zulu $1 (aarch64) indiriliyor…"
 	local url
-	url="$(curl -s "https://api.azul.com/metadata/v1/zulu/packages/?java_version=$jv&os=macos&arch=aarch64&archive_type=tar.gz&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&page=1&page_size=1" \
+	url="$(curl -s "https://api.azul.com/metadata/v1/zulu/packages/?java_version=$1&os=macos&arch=aarch64&archive_type=tar.gz&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&page=1&page_size=1" \
 		| /usr/bin/python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["download_url"])')"
-	[ -n "$url" ] || die "Zulu $jv indirme URL'si alınamadı."
-	mkdir -p "$DOWNLOADS"; local tmp="$DOWNLOADS/zulu$jv.tgz"
-	curl -fsSL -o "$tmp" "$url"
+	[ -n "$url" ] || die "Zulu $1 URL'si alınamadı."
+	mkdir -p "$DOWNLOADS"; local tmp="$DOWNLOADS/zulu$1.tgz"
+	curl -fSL --retry 5 -o "$tmp" "$url"
+	gzip -t "$tmp" 2>/dev/null || die "Zulu $1 indirme bozuk."
 	local stage; stage="$(mktemp -d)"; tar xzf "$tmp" -C "$stage"
-	local bundle; bundle="$(find "$stage" -maxdepth 1 -type d -name 'zulu*' | head -1)"
-	[ -n "$bundle" ] || die "Zulu $jv arşiv yapısı beklenenden farklı."
-	mkdir -p "$(dirname "$dest")"; rm -rf "$dest"; mv "$bundle" "$dest"; rm -rf "$stage"
+	local b; b="$(find "$stage" -maxdepth 1 -type d -name 'zulu*' | head -1)"
+	[ -n "$b" ] || die "Zulu $1 arşiv yapısı farklı."
+	mkdir -p "$(dirname "$2")"; rm -rf "$2"; mv "$b" "$2"; rm -rf "$stage"
 }
 
 # ----- Hedefler -----
@@ -100,122 +102,118 @@ check_deps() {
 	done
 	c_ok "Araçlar mevcut"
 	local ok=0
-	[ -n "$(arm8_home)" ] && c_ok "arm64 Java 8 (runtime): $(arm8_home)" || { c_warn "arm64 Java 8 YOK → scripts/build.sh jdk"; ok=1; }
+	[ -n "$(jdk11_home)" ] && c_ok "arm64 Java 11 (runtime): $(jdk11_home)" || { c_warn "arm64 Java 11 YOK → scripts/build.sh jdk"; ok=1; }
 	if jp="$(find_jpackage)"; then c_ok "jpackage: $jp"; else c_warn "jpackage'lı 17+ JDK YOK → scripts/build.sh jpackage-jdk"; ok=1; fi
 	return $ok
 }
 
 jdk() {
-	[ -n "$(arm8_home)" ] && { c_ok "arm64 Java 8 zaten kurulu."; return 0; }
-	install_zulu 8 "$JDK8_DEST"
-	[ -n "$(arm8_home)" ] && c_ok "Kuruldu: $JDK8_DEST" || die "Kurulum sonrası arm64 Java 8 görünmüyor."
+	[ -n "$(jdk11_home)" ] && { c_ok "arm64 Java 11 zaten kurulu."; return 0; }
+	install_zulu 11 "$JDK11_DEST"
+	[ -n "$(jdk11_home)" ] && c_ok "Kuruldu: $JDK11_DEST" || die "Java 11 kurulum sonrası görünmüyor."
 }
 
 jpackage_jdk() {
 	find_jpackage >/dev/null 2>&1 && { c_ok "jpackage zaten var."; return 0; }
 	install_zulu 21 "$JDK21_DEST"
-	find_jpackage >/dev/null 2>&1 && c_ok "jpackage hazır: $JDK21_DEST" || die "jpackage hâlâ bulunamadı."
+	find_jpackage >/dev/null 2>&1 && c_ok "jpackage hazır." || die "jpackage bulunamadı."
 }
 
 download() {
 	c_info "Kaynak paket hazırlanıyor…"
 	mkdir -p "$DOWNLOADS" "$BUILD"
-	if [ ! -s "$UDE_ZIP" ]; then
-		c_info "İndiriliyor: $UDE_URL"; curl -fL --retry 3 -o "$UDE_ZIP" "$UDE_URL"
-	else
-		c_ok "Önbellekten: $UDE_ZIP ($(du -h "$UDE_ZIP" | cut -f1))"
-	fi
+	[ -s "$UDE_ZIP" ] && c_ok "Önbellekten: $UDE_ZIP ($(du -h "$UDE_ZIP" | cut -f1))" \
+		|| { c_info "İndiriliyor: $UDE_URL"; curl -fL --retry 3 -o "$UDE_ZIP" "$UDE_URL"; }
 	rm -rf "$SRC_APP_DIR"; mkdir -p "$SRC_APP_DIR"
 	local stage; stage="$(mktemp -d)"
 	( cd "$stage" && unzip -q "$UDE_ZIP" )
 	local src; src="$(find "$stage" -maxdepth 1 -type d -name '*.app' | head -1)"
-	[ -n "$src" ] || die "Zip içinde .app bulunamadı."
-	cp -R "$src" "$SRC_APP_DIR/app"
-	rm -rf "$stage"
+	[ -n "$src" ] || die "Zip içinde .app yok."
+	cp -R "$src" "$SRC_APP_DIR/app"; rm -rf "$stage"
 	find "$SRC_APP_DIR" -name '._*' -delete 2>/dev/null || true
-	[ -s "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ] || die "editor-app.jar bulunamadı."
-	c_ok "Kaynak açıldı: $SRC_APP_DIR/app"
+	[ -s "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ] || die "editor-app.jar yok."
+	c_ok "Kaynak açıldı."
 }
 
 deps() {
 	c_info "sqlite-jdbc $SQLITE_VER hazırlanıyor…"
 	mkdir -p "$VENDOR"
 	[ -s "$SQLITE_JAR" ] || curl -fsSL -o "$SQLITE_JAR" "$SQLITE_URL"
-	unzip -l "$SQLITE_JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null \
-		|| die "sqlite-jdbc $SQLITE_VER içinde arm64 dylib yok."
-	c_ok "sqlite-jdbc hazır (arm64 dylib doğrulandı)"
+	unzip -l "$SQLITE_JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "arm64 dylib yok."
+	c_ok "sqlite-jdbc hazır"
+}
+
+shim() {
+	c_info "eawt-shim derleniyor (Java 11 com.apple.eawt yerine geçer)…"
+	local jc; jc="$(javac17)" || die "Derleyici (jpackage JDK) yok → scripts/build.sh jpackage-jdk"
+	rm -rf "$BUILD/_shim"; mkdir -p "$BUILD/_shim"
+	"$jc" --release 11 -d "$BUILD/_shim" $(find "$SHIM_SRC" -name '*.java') \
+		|| die "eawt-shim derlenemedi."
+	c_ok "eawt-shim derlendi ($(find "$BUILD/_shim" -name '*.class' | wc -l | tr -d ' ') sınıf)"
 }
 
 patch_jar() {
 	local JAR="$SRC_APP_DIR/app/Contents/Java/editor-app.jar"
 	[ -s "$JAR" ] || die "Önce 'download' çalıştır."
 	[ -s "$SQLITE_JAR" ] || die "Önce 'deps' çalıştır."
-	c_info "editor-app.jar içinde sqlite 3.7.2 → $SQLITE_VER swap…"
+	c_info "editor-app.jar yamalama (sqlite swap + gömülü eawt çıkar)…"
+	# sqlite 3.7.2 -> 3.46
 	zip -q -d "$JAR" 'org/sqlite/*' 'native/*' 'META-INF/maven/org.xerial/*' >/dev/null 2>&1 || true
 	local stage; stage="$(mktemp -d)"
 	( cd "$stage" && unzip -qo "$SQLITE_JAR" -x 'META-INF/MANIFEST.MF' )
 	( cd "$stage" && zip -q -r -X "$JAR" org META-INF sqlite-jdbc.properties )
 	rm -rf "$stage"
-	unzip -l "$JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "swap sonrası arm64 dylib yok!"
+	# Gömülü (Java 8 native-bağımlı) com.apple.eawt/eio sınıflarını çıkar (shim sağlayacak)
+	zip -q -d "$JAR" 'com/apple/eawt/*' 'com/apple/eio/*' >/dev/null 2>&1 || true
+	unzip -l "$JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
-	c_ok "sqlite swap tamam"
+	c_ok "jar yamalandı (sqlite 3.46 + eawt çıkarıldı)"
 }
 
 package() {
 	[ -d "$SRC_APP_DIR/app" ] || die "Önce 'download' çalıştır."
+	[ -d "$BUILD/_shim" ] || die "Önce 'shim' çalıştır."
 	local jp; jp="$(find_jpackage)" || die "jpackage yok → scripts/build.sh jpackage-jdk"
-	local arm8; arm8="$(arm8_home)"; [ -n "$arm8" ] || die "arm64 Java 8 yok → scripts/build.sh jdk"
-	[ -x "$arm8/jre/lib/jli/libjli.dylib" ] || die "arm64 Java 8 JRE layout beklenenden farklı: $arm8/jre"
-
-	# runtime-image: jre + release (jre'de release yok → jpackage sürüm okuyamayıp imzayı yarıda kesiyor)
-	local runtime; runtime="$BUILD/_runtime"; rm -rf "$runtime"
-	cp -R "$arm8/jre" "$runtime"
-	[ -f "$arm8/release" ] && cp "$arm8/release" "$runtime/release"
+	local rt; rt="$(jdk11_home)"; [ -n "$rt" ] || die "Java 11 yok → scripts/build.sh jdk"
+	[ -f "$rt/lib/jli/libjli.dylib" ] || die "Java 11 runtime layout farklı: $rt"
 
 	c_info "jpackage girdisi hazırlanıyor…"
 	local JAVA="$SRC_APP_DIR/app/Contents/Java"
-	local RES="$SRC_APP_DIR/app/Contents/Resources"
 	local in="$BUILD/_input"; rm -rf "$in"; mkdir -p "$in"
 	cp "$JAVA/editor-app.jar" "$in/"
 	cp "$JAVA/"*.gif "$in/" 2>/dev/null || true
 	cp "$JAVA/"*.ico "$in/" 2>/dev/null || true
 	cp "$JAVA/BENIOKU.txt" "$in/" 2>/dev/null || true
-	local icns; icns="$(ls "$RES/"*.icns 2>/dev/null | head -1)"
-
+	# eawt-shim'i jar yapıp girdiye koy (--patch-module ile yüklenecek)
+	( cd "$BUILD/_shim" && "$(dirname "$jp")/jar" cf "$in/eawt-shim.jar" com )
+	local icns; icns="$(ls "$SRC_APP_DIR/app/Contents/Resources/"*.icns 2>/dev/null | head -1)"
+	local ude_ver; ude_ver="$(plutil -extract CFBundleVersion raw "$SRC_APP_DIR/app/Contents/Info.plist" 2>/dev/null || echo 1.0)"
 	local assoc="$BUILD/_udf.properties"
 	printf 'extension=udf\nmime-type=application/x-uyap-udf\ndescription=Uyap Doküman\n' > "$assoc"
 
-	# UDE sürümünü kaynaktan al (jpackage Info.plist'i değiştirir; CFBundleVersion korunmalı)
-	local ude_ver; ude_ver="$(plutil -extract CFBundleVersion raw "$SRC_APP_DIR/app/Contents/Info.plist" 2>/dev/null || echo 1.0)"
-
-	c_info "jpackage ile .app paketleniyor (ASCII ad, arm64 Java 8 JRE gömülü, v$ude_ver)…"
+	c_info "jpackage ile .app paketleniyor (Java 11 + eawt-shim, v$ude_ver)…"
 	rm -rf "$APP" "$BUILD/$ASCII_NAME.app"
-	"$jp" \
-		--type app-image --name "$ASCII_NAME" \
-		--app-version "$ude_ver" \
-		--input "$in" \
-		--main-jar editor-app.jar --main-class "$MAIN_CLASS" \
+	"$jp" --type app-image --name "$ASCII_NAME" --app-version "$ude_ver" \
+		--input "$in" --main-jar editor-app.jar --main-class "$MAIN_CLASS" \
 		--arguments getNewWPInstance --arguments EDITOR_TYPE_DOCUMENT \
-		--runtime-image "$runtime" \
+		--runtime-image "$rt" \
+		--java-options '--patch-module=java.desktop=$APPDIR/eawt-shim.jar' \
+		--java-options '--add-exports=java.desktop/com.apple.eawt=ALL-UNNAMED' \
+		--java-options '--add-exports=java.desktop/com.apple.eio=ALL-UNNAMED' \
+		--java-options '--add-opens=java.desktop/com.apple.eawt=ALL-UNNAMED' \
 		--java-options -Xms512M --java-options -Xmx4096M \
-		--java-options -Dawt.useSystemAAFontSettings=on --java-options -Dswing.aatext=true \
-		--java-options -Dapple.awt.graphics.UseQuartz=true \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
 		${icns:+--icon "$icns"} \
-		--mac-package-identifier "$BUNDLE_ID" \
-		--file-associations "$assoc" \
-		--dest "$BUILD" 2>&1 | grep -viE 'NoSuchElementException|No value present' || true
-	rm -f "$assoc"; rm -rf "$runtime"
+		--mac-package-identifier "$BUNDLE_ID" --file-associations "$assoc" \
+		--dest "$BUILD" 2>&1 | grep -viE 'NoSuchElement|No value' || true
+	rm -f "$assoc"
 	[ -d "$BUILD/$ASCII_NAME.app" ] || die "jpackage .app üretemedi."
 
-	# Görünen adı Türkçe yap (executable ASCII kalır → codesign sorunsuz)
 	local plist="$BUILD/$ASCII_NAME.app/Contents/Info.plist"
 	plutil -replace CFBundleName -string "$APP_NAME" "$plist"
 	plutil -replace CFBundleDisplayName -string "$APP_NAME" "$plist" 2>/dev/null \
 		|| plutil -insert CFBundleDisplayName -string "$APP_NAME" "$plist"
-	# Retina: jpackage bunu STRING yazıyor → macOS yok sayıp 1x render ediyor; boolean olmalı
 	plutil -replace NSHighResolutionCapable -bool true "$plist"
-	# .app klasörünü Türkçe'ye adlandır (mührü etkilemez; imza Contents/'i mühürler)
 	mv "$BUILD/$ASCII_NAME.app" "$APP"
 	c_ok "Paketlendi: $APP ($(du -sh "$APP" | cut -f1))"
 }
@@ -224,20 +222,16 @@ sign() {
 	[ -d "$APP" ] || die "Önce 'package' çalıştır."
 	c_info "ad-hoc imzalanıyor…"
 	find "$APP" -name '._*' -delete 2>/dev/null || true
-	# jpackage'ın Java 8 runtime imzası yarım kalıyor → baştan ad-hoc imzala.
-	# executable ASCII olduğu için --deep'siz tek imza yeterli ve geçerli.
 	codesign --force -s - --identifier "$BUNDLE_ID" "$APP"
-	codesign --verify --strict "$APP" 2>/dev/null \
-		&& c_ok "İmza geçerli (adhoc, strict)" \
-		|| die "İmza doğrulanamadı."
+	codesign --verify --strict "$APP" 2>/dev/null && c_ok "İmza geçerli (adhoc, strict)" || die "İmza doğrulanamadı."
 }
 
 all() {
-	check_deps || die "Ön koşul eksik (yukarıdaki uyarıya bak: jdk / jpackage-jdk)."
-	download; deps; patch_jar; package; sign
+	check_deps || die "Ön koşul eksik (jdk / jpackage-jdk)."
+	download; deps; shim; patch_jar; package; sign
 	echo
 	c_ok "BİTTİ → $APP"
-	c_info "Çalıştır: open \"$APP\"   |   Kur: /Applications'a sürükle (çift-tık ile .udf açılır)"
+	c_info "Çalıştır: open \"$APP\"   |   Kur: /Applications'a sürükle (çift-tık ile .udf açılır, Retina'da keskin)"
 	c_warn "E-imza ancak gerçek kart + arm64 PKCS#11 middleware ile test edilebilir."
 }
 
@@ -246,39 +240,29 @@ distclean() { c_info "build/ + downloads/ + vendor jar temizleniyor…"; rm -rf 
 
 help() {
 	cat <<EOF
-build.sh — UDE native arm64 .app üretici (jpackage, JRE gömülü)
+build.sh — UDE native arm64 .app üretici (Java 11 gömülü + eawt-shim)
 
 Hedefler:
   all          Tüm hattı çalıştır (varsayılan)
-  check-deps   Araçları + arm64 Java 8 + jpackage'ı denetle
-  jdk          arm64 Java 8 (gömülecek runtime) yoksa Azul Zulu 8 kur
+  check-deps   Araç + arm64 Java 11 + jpackage denetimi
+  jdk          Gömülecek arm64 Java 11 yoksa Azul Zulu 11 kur
   jpackage-jdk jpackage'lı 17+ JDK yoksa Azul Zulu 21 kur
   download     Paketi indir + kaynağı aç
   deps         sqlite-jdbc indir + arm64 dylib doğrula
-  patch        editor-app.jar içinde sqlite swap
-  package      jpackage ile .app üret (.udf ilişkilendirmeli, JRE gömülü)
+  shim         eawt-shim derle
+  patch        editor-app.jar yamala (sqlite swap + eawt çıkar)
+  package      jpackage ile .app üret (Java 11 + shim, .udf ilişkilendirmeli)
   sign         ad-hoc codesign
-  clean        build/ sil
-  distclean    build/ + indirilenler + vendor jar sil
+  clean / distclean
 
-Ortam değişkenleri:
-  UDE_URL / UDE_ZIP   Kaynak paket (yeni sürüm / yerel zip)
-  SQLITE_VER          sqlite-jdbc sürümü (vars: $SQLITE_VER)
+Ortam: UDE_URL / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
 EOF
 }
 
 case "${1:-all}" in
-	all)          all ;;
-	check-deps)   check_deps ;;
-	jdk)          jdk ;;
-	jpackage-jdk) jpackage_jdk ;;
-	download)     download ;;
-	deps)         deps ;;
-	patch)        patch_jar ;;
-	package)      package ;;
-	sign)         sign ;;
-	clean)        clean ;;
-	distclean)    distclean ;;
+	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
+	download) download ;; deps) deps ;; shim) shim ;; patch) patch_jar ;;
+	package) package ;; sign) sign ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
 	*) die "Bilinmeyen hedef: $1  (scripts/build.sh help)" ;;
 esac

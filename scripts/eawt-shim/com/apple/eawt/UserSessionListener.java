@@ -1,0 +1,1 @@
+package com.apple.eawt; public interface UserSessionListener extends AppEventListener { void userSessionDeactivated(AppEvent.UserSessionEvent e); void userSessionActivated(AppEvent.UserSessionEvent e); }

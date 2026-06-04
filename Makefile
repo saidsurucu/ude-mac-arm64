@@ -3,15 +3,15 @@
 
 SH := bash scripts/build.sh
 
-.PHONY: all check-deps jdk jpackage-jdk download deps patch package sign clean distclean help
+.PHONY: all check-deps jdk jpackage-jdk download deps shim patch package sign clean distclean help
 
 all: ## ARM64 .app'i üret (varsayılan)
 	@$(SH) all
 
-check-deps: ## Araçları, arm64 Java 8 ve jpackage'ı denetle
+check-deps: ## Araçları, arm64 Java 11 ve jpackage'ı denetle
 	@$(SH) check-deps
 
-jdk: ## Gömülecek arm64 Java 8 yoksa Azul Zulu 8 kur
+jdk: ## Gömülecek arm64 Java 11 yoksa Azul Zulu 11 kur
 	@$(SH) jdk
 
 jpackage-jdk: ## jpackage'lı 17+ JDK yoksa Azul Zulu 21 kur
@@ -23,10 +23,13 @@ download: ## Kaynak paketi indir ve aç
 deps: ## sqlite-jdbc'yi indir + arm64 dylib doğrula
 	@$(SH) deps
 
-patch: ## editor-app.jar içinde sqlite swap
+shim: ## eawt-shim derle (Java 11 com.apple.eawt yerine)
+	@$(SH) shim
+
+patch: ## editor-app.jar yamala (sqlite swap + eawt çıkar)
 	@$(SH) patch
 
-package: ## jpackage ile .app üret (.udf ilişkilendirmeli, JRE gömülü)
+package: ## jpackage ile .app üret (Java 11 + shim, .udf ilişkilendirmeli)
 	@$(SH) package
 
 sign: ## ad-hoc codesign
