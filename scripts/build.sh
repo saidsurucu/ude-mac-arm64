@@ -198,7 +198,8 @@ package() {
 		--arguments getNewWPInstance --arguments EDITOR_TYPE_DOCUMENT \
 		--runtime-image "$runtime" \
 		--java-options -Xms512M --java-options -Xmx4096M \
-		--java-options -Dsun.java2d.dpiaware=false --java-options -Dsun.java2d.uiScale=1 \
+		--java-options -Dawt.useSystemAAFontSettings=on --java-options -Dswing.aatext=true \
+		--java-options -Dapple.awt.graphics.UseQuartz=true \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
 		${icns:+--icon "$icns"} \
 		--mac-package-identifier "$BUNDLE_ID" \
@@ -212,6 +213,8 @@ package() {
 	plutil -replace CFBundleName -string "$APP_NAME" "$plist"
 	plutil -replace CFBundleDisplayName -string "$APP_NAME" "$plist" 2>/dev/null \
 		|| plutil -insert CFBundleDisplayName -string "$APP_NAME" "$plist"
+	# Retina: jpackage bunu STRING yazıyor → macOS yok sayıp 1x render ediyor; boolean olmalı
+	plutil -replace NSHighResolutionCapable -bool true "$plist"
 	# .app klasörünü Türkçe'ye adlandır (mührü etkilemez; imza Contents/'i mühürler)
 	mv "$BUILD/$ASCII_NAME.app" "$APP"
 	c_ok "Paketlendi: $APP ($(du -sh "$APP" | cut -f1))"
