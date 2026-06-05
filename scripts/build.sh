@@ -15,6 +15,9 @@
 #   2) Java 8 Retina yok    -> Java 11 runtime gömülür
 #   3) com.apple.eawt yok   -> eawt-shim (--patch-module java.desktop)
 #   4) sqlite-jdbc 3.7.2    -> 3.46.x (arm64 dylib)
+#   5) e-imza kart görünmüyor -> javax.smartcardio macOS'ta PCSC native'i varsayılan
+#      yolda bulamıyor; jpackage'a -Dsun.security.smartcardio.library=<PCSC.framework>
+#      java-option'ı gömülür (cfg'ye yansır, ad-hoc imzayla tutarlı).
 #   + ASCII executable adı (codesign Türkçe karakterle bozuluyor) + ad-hoc imza
 #
 set -euo pipefail
@@ -232,6 +235,7 @@ package() {
 		--java-options '--add-exports=java.desktop/com.apple.eawt=ALL-UNNAMED' \
 		--java-options '--add-exports=java.desktop/com.apple.eio=ALL-UNNAMED' \
 		--java-options '--add-opens=java.desktop/com.apple.eawt=ALL-UNNAMED' \
+		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/Current/PCSC' \
 		--java-options -Xms512M --java-options -Xmx4096M \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
 		${icns:+--icon "$icns"} \

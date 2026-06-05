@@ -12,8 +12,9 @@ ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 > Resmî değildir; hiçbir kamu kurumu tarafından geliştirilmemiş/onaylanmamıştır.
 > "Olduğu gibi" sunulur.
 
-> ⚠️ **E-imza henüz gerçek kartla test EDİLMEDİ.** Belge açma/düzenleme çalışıyor;
-> imzalama doğrulanmadı.
+> ⚠️ **E-imza:** Kart okuyucu algılaması (`5.4.17_3`+) düzeltildi — gömülü Java artık
+> PCSC üzerinden akıllı kartı görüyor. Tam imzalama akışı kullanıcı geri bildirimleriyle
+> doğrulanmaktadır. Belge açma/düzenleme sorunsuz.
 
 ---
 
@@ -75,6 +76,10 @@ Resmî paket x86_64. Native arm64 için:
    sürümler bu modu açık derlenir.
 
 E-imza, JDK'nın `javax.smartcardio` + `sun.security.pkcs11` API'leriyle çalışır (JNA değil).
+Gömülü Java'nın `javax.smartcardio` katmanı macOS'ta PCSC native kütüphanesini varsayılan
+yolda bulamadığından kart okuyucu görünmüyordu; `jpackage`'a
+`-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/Current/PCSC`
+java-option'ı gömülerek çözüldü (`5.4.17_3`+).
 
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
