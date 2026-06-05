@@ -30,6 +30,7 @@ DOWNLOADS="$ROOT/downloads"
 SRC_APP_DIR="$BUILD/_src"
 SHIM_SRC="$SCRIPT_DIR/eawt-shim"
 ICONS_SRC="$SCRIPT_DIR/icons"
+TEXTKEYS_SRC="$SCRIPT_DIR/macos-textkeys"
 ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
@@ -167,6 +168,15 @@ shim() {
 	c_ok "eawt-shim derlendi ($(find "$BUILD/_shim" -name '*.class' | wc -l | tr -d ' ') sınıf)"
 }
 
+textkeys() {
+	c_info "macOS metin kısayolları javaagent'ı derleniyor (Option+Delete vb.)…"
+	local jc; jc="$(javac17)" || die "Derleyici (jpackage JDK) yok → scripts/build.sh jpackage-jdk"
+	rm -rf "$BUILD/_textkeys"; mkdir -p "$BUILD/_textkeys"
+	"$jc" --release 11 -d "$BUILD/_textkeys" $(find "$TEXTKEYS_SRC" -name '*.java') \
+		|| die "macos-textkeys derlenemedi."
+	c_ok "macos-textkeys derlendi ($(find "$BUILD/_textkeys" -name '*.class' | wc -l | tr -d ' ') sınıf)"
+}
+
 apply_icons() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ -z "$ICONS" ] && return 0
@@ -207,6 +217,7 @@ patch_jar() {
 package() {
 	[ -d "$SRC_APP_DIR/app" ] || die "Önce 'download' çalıştır."
 	[ -d "$BUILD/_shim" ] || die "Önce 'shim' çalıştır."
+	[ -d "$BUILD/_textkeys" ] || die "Önce 'textkeys' çalıştır."
 	local jp; jp="$(find_jpackage)" || die "jpackage yok → scripts/build.sh jpackage-jdk"
 	local rt; rt="$(jdk11_home)"; [ -n "$rt" ] || die "Java 11 yok → scripts/build.sh jdk"
 	[ -f "$rt/lib/jli/libjli.dylib" ] || die "Java 11 runtime layout farklı: $rt"
@@ -220,6 +231,9 @@ package() {
 	cp "$JAVA/BENIOKU.txt" "$in/" 2>/dev/null || true
 	# eawt-shim'i jar yapıp girdiye koy (--patch-module ile yüklenecek)
 	( cd "$BUILD/_shim" && "$(dirname "$jp")/jar" cf "$in/eawt-shim.jar" com )
+	# macOS metin kısayolları agent'ını jar yap (-javaagent ile yüklenecek)
+	printf 'Premain-Class: macostextkeys.MacTextKeys\nAgent-Class: macostextkeys.MacTextKeys\n' > "$BUILD/_textkeys/MANIFEST.MF"
+	( cd "$BUILD/_textkeys" && "$(dirname "$jp")/jar" cfm "$in/macos-textkeys.jar" MANIFEST.MF macostextkeys )
 	local icns; icns="$(ls "$SRC_APP_DIR/app/Contents/Resources/"*.icns 2>/dev/null | head -1)"
 	local ude_ver; ude_ver="$(plutil -extract CFBundleVersion raw "$SRC_APP_DIR/app/Contents/Info.plist" 2>/dev/null || echo 1.0)"
 	local assoc="$BUILD/_udf.properties"
@@ -235,6 +249,7 @@ package() {
 		--java-options '--add-exports=java.desktop/com.apple.eawt=ALL-UNNAMED' \
 		--java-options '--add-exports=java.desktop/com.apple.eio=ALL-UNNAMED' \
 		--java-options '--add-opens=java.desktop/com.apple.eawt=ALL-UNNAMED' \
+		--java-options '-javaagent:$APPDIR/macos-textkeys.jar' \
 		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC' \
 		--java-options -Xms512M --java-options -Xmx4096M \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
@@ -269,7 +284,7 @@ sign() {
 
 all() {
 	check_deps || die "Ön koşul eksik (jdk / jpackage-jdk)."
-	download; deps; shim; patch_jar; package; sign
+	download; deps; shim; textkeys; patch_jar; package; sign
 	echo
 	c_ok "BİTTİ → $APP"
 	c_info "Çalıştır: open \"$APP\"   |   Kur: /Applications'a sürükle (çift-tık ile .udf açılır, Retina'da keskin)"
@@ -291,6 +306,7 @@ Hedefler:
   download     Paketi indir + kaynağı aç
   deps         sqlite-jdbc indir + arm64 dylib doğrula
   shim         eawt-shim derle
+  textkeys     macOS metin kısayolları javaagent'ını derle (Option+Delete vb.)
   patch        editor-app.jar yamala (sqlite swap + eawt çıkar)
   package      jpackage ile .app üret (Java 11 + shim, .udf ilişkilendirmeli)
   sign         ad-hoc codesign
@@ -303,7 +319,7 @@ EOF
 
 case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
-	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; patch) patch_jar ;;
+	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; patch) patch_jar ;;
 	package) package ;; sign) sign ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
 	*) die "Bilinmeyen hedef: $1  (scripts/build.sh help)" ;;
