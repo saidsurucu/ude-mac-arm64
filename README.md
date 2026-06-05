@@ -12,9 +12,9 @@ ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 > Resmî değildir; hiçbir kamu kurumu tarafından geliştirilmemiş/onaylanmamıştır.
 > "Olduğu gibi" sunulur.
 
-> ⚠️ **E-imza:** Kart okuyucu algılaması (`5.4.17_3`+) düzeltildi — gömülü Java artık
-> PCSC üzerinden akıllı kartı görüyor. Tam imzalama akışı kullanıcı geri bildirimleriyle
-> doğrulanmaktadır. Belge açma/düzenleme sorunsuz.
+> ✅ **E-imza çalışıyor:** Akıllı kart okuyucu algılaması (`5.4.17_4`+) çözüldü —
+> gömülü Java artık PCSC üzerinden kartı görüyor ve imzalama akışı baştan sona
+> çalışıyor. Belge açma/düzenleme de sorunsuz.
 
 ---
 
@@ -75,11 +75,16 @@ Resmî paket x86_64. Native arm64 için:
    `scripts/icons/overrides`, yama `scripts/icons/IconLoaderPatch.java`. Yayınlanan
    sürümler bu modu açık derlenir.
 
-E-imza, JDK'nın `javax.smartcardio` + `sun.security.pkcs11` API'leriyle çalışır (JNA değil).
-Gömülü Java'nın `javax.smartcardio` katmanı macOS'ta PCSC native kütüphanesini varsayılan
-yolda bulamadığından kart okuyucu görünmüyordu; `jpackage`'a
-`-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/Current/PCSC`
-java-option'ı gömülerek çözüldü (`5.4.17_3`+).
+7. **E-imza** (`5.4.17_4`+) → JDK'nın `javax.smartcardio` + `sun.security.pkcs11`
+   API'leriyle çalışır (JNA değil). Gömülü Java'nın `javax.smartcardio` katmanı macOS'ta
+   PCSC native kütüphanesini varsayılan yolda bulamadığından kart okuyucu görünmüyordu.
+   Çözüm `-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC`
+   ile bu yolu vermek; ancak `jpackage`'ın `.cfg` java-option'ları çift-tıkla açılan
+   launcher'da bu JVM'e ulaşmıyordu (kullanıcı `lsof` ile doğruladı: framework yüklenmiyordu).
+   Bu yüzden parametre, JVM'in her zaman okuduğu `JAVA_TOOL_OPTIONS` ortam değişkenine,
+   `.app`'in `Info.plist`'indeki `LSEnvironment` (Launch Services) anahtarıyla gömülür →
+   çift-tık açılışta garanti uygulanır. (`Versions/Current` symlink yerine kanıtlanmış
+   `Versions/A` yolu kullanılır.)
 
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
