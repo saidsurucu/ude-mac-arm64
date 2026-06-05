@@ -15,3 +15,6 @@
 
 # proje dışı (harness cache)
 /cache/
+
+# Javassist build-time dep (icon-deps indirir)
+/scripts/lib/*.jar
