@@ -37,8 +37,13 @@ import javax.swing.text.Utilities;
 
 public final class MacTextKeys {
 
-    /** Option tuşu macOS'ta ALT olarak gelir. */
+    /** Sol Option tuşu macOS'ta ALT olarak gelir. */
     private static final int OPT = InputEvent.ALT_DOWN_MASK;
+    /**
+     * Sağ Option tuşu macOS + Java'da ALT değil ALT_GRAPH (AltGr) üretir. Aynı
+     * kısayolların sağ Option ile de çalışması için bu maskeyle de bağlanırlar.
+     */
+    private static final int OPT_R = InputEvent.ALT_GRAPH_DOWN_MASK;
     /** Command tuşu (menü kısayol maskesi macOS'ta META döner). */
     private static final int CMD = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
     private static final int SHIFT = InputEvent.SHIFT_DOWN_MASK;
@@ -91,15 +96,15 @@ public final class MacTextKeys {
         InputMap im = tc.getInputMap(); // WHEN_FOCUSED
         if (im == null) return;
 
-        // Kelime silme
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, OPT), DefaultEditorKit.deletePrevWordAction);
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, OPT), DefaultEditorKit.deleteNextWordAction);
+        // Kelime silme (sol + sağ Option)
+        putOpt(im, KeyEvent.VK_BACK_SPACE, 0, DefaultEditorKit.deletePrevWordAction);
+        putOpt(im, KeyEvent.VK_DELETE, 0, DefaultEditorKit.deleteNextWordAction);
 
         // Kelime atlama (+ Shift ile seçerek)
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, OPT), DefaultEditorKit.previousWordAction);
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, OPT), DefaultEditorKit.nextWordAction);
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, OPT | SHIFT), DefaultEditorKit.selectionPreviousWordAction);
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, OPT | SHIFT), DefaultEditorKit.selectionNextWordAction);
+        putOpt(im, KeyEvent.VK_LEFT, 0, DefaultEditorKit.previousWordAction);
+        putOpt(im, KeyEvent.VK_RIGHT, 0, DefaultEditorKit.nextWordAction);
+        putOpt(im, KeyEvent.VK_LEFT, SHIFT, DefaultEditorKit.selectionPreviousWordAction);
+        putOpt(im, KeyEvent.VK_RIGHT, SHIFT, DefaultEditorKit.selectionNextWordAction);
 
         // Satır başı / sonu (+ Shift ile seçerek)
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, CMD), DefaultEditorKit.beginLineAction);
@@ -119,6 +124,15 @@ public final class MacTextKeys {
             am.put(ACT_DELETE_TO_LINE_START, DELETE_TO_LINE_START);
         }
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, CMD), ACT_DELETE_TO_LINE_START);
+    }
+
+    /**
+     * Bir Option kısayolunu hem sol Option (ALT) hem sağ Option (ALT_GRAPH) ile
+     * bağlar. {@code extraMods} ek maskedir (ör. SHIFT) ya da yoksa 0.
+     */
+    private static void putOpt(InputMap im, int keyCode, int extraMods, Object action) {
+        im.put(KeyStroke.getKeyStroke(keyCode, OPT | extraMods), action);
+        im.put(KeyStroke.getKeyStroke(keyCode, OPT_R | extraMods), action);
     }
 
     /** macOS Cmd+Delete: imleçten satır başına kadar olan metni siler. */
