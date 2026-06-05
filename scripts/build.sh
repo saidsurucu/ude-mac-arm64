@@ -235,7 +235,7 @@ package() {
 		--java-options '--add-exports=java.desktop/com.apple.eawt=ALL-UNNAMED' \
 		--java-options '--add-exports=java.desktop/com.apple.eio=ALL-UNNAMED' \
 		--java-options '--add-opens=java.desktop/com.apple.eawt=ALL-UNNAMED' \
-		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/Current/PCSC' \
+		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC' \
 		--java-options -Xms512M --java-options -Xmx4096M \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
 		${icns:+--icon "$icns"} \
@@ -249,6 +249,12 @@ package() {
 	plutil -replace CFBundleDisplayName -string "$APP_NAME" "$plist" 2>/dev/null \
 		|| plutil -insert CFBundleDisplayName -string "$APP_NAME" "$plist"
 	plutil -replace NSHighResolutionCapable -bool true "$plist"
+	# E-imza: PCSC kütüphane yolu jpackage launcher'a .cfg java-options ile geçmiyor;
+	# JVM'in her zaman okuduğu JAVA_TOOL_OPTIONS'ı Launch Services (LSEnvironment) ile ver →
+	# çift-tıkla açılışta -D garanti uygulanır (yol Versions/A; Current symlink kullanılmaz).
+	plutil -insert LSEnvironment -json \
+		'{"JAVA_TOOL_OPTIONS":"-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC"}' \
+		"$plist" 2>/dev/null || c_warn "LSEnvironment eklenemedi (plutil -json desteklemiyor?)"
 	mv "$BUILD/$ASCII_NAME.app" "$APP"
 	c_ok "Paketlendi: $APP ($(du -sh "$APP" | cut -f1))"
 }
