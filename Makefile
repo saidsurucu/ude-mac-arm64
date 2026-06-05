@@ -3,7 +3,7 @@
 
 SH := bash scripts/build.sh
 
-.PHONY: all check-deps jdk jpackage-jdk download deps shim patch package sign clean distclean help
+.PHONY: all check-deps jdk jpackage-jdk download deps shim zoom patch package sign clean distclean help
 
 all: ## ARM64 .app'i üret (varsayılan)
 	@$(SH) all
@@ -25,6 +25,9 @@ deps: ## sqlite-jdbc'yi indir + arm64 dylib doğrula
 
 shim: ## eawt-shim derle (Java 11 com.apple.eawt yerine)
 	@$(SH) shim
+
+zoom: ## macOS trackpad zoom javaagent derle (Cmd+iki parmak)
+	@$(SH) zoom
 
 patch: ## editor-app.jar yamala (sqlite swap + eawt çıkar)
 	@$(SH) patch
