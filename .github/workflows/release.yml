@@ -90,4 +90,4 @@ jobs:
 
             ## Not
             - E-imza için sistemde ayrıca **arm64 PKCS#11 token middleware** (AKİS vb.) kurulu olmalıdır.
-            - ⚠️ E-imza henüz gerçek kartla test edilmedi.
+            - ✅ E-imza gerçek kart + arm64 middleware ile test edildi, çalışıyor.
