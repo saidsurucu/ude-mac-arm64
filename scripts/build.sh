@@ -173,7 +173,7 @@ textkeys() {
 	c_info "macOS metin kısayolları javaagent'ı derleniyor (Option+Delete vb.)…"
 	local jc; jc="$(javac17)" || die "Derleyici (jpackage JDK) yok → scripts/build.sh jpackage-jdk"
 	rm -rf "$BUILD/_textkeys"; mkdir -p "$BUILD/_textkeys"
-	"$jc" --release 11 -d "$BUILD/_textkeys" $(find "$TEXTKEYS_SRC" -name '*.java') \
+	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_textkeys" $(find "$TEXTKEYS_SRC" -name '*.java') \
 		|| die "macos-textkeys derlenemedi."
 	c_ok "macos-textkeys derlendi ($(find "$BUILD/_textkeys" -name '*.class' | wc -l | tr -d ' ') sınıf)"
 }
