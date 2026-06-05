@@ -29,10 +29,12 @@ import java.awt.AWTEvent;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.EventQueue;
+import java.awt.KeyboardFocusManager;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.AWTEventListener;
 import java.awt.event.FocusEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseWheelEvent;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
@@ -51,6 +53,8 @@ public final class MacZoom {
     private static final boolean DEBUG = "1".equals(System.getProperty("macoszoom.debug"));
     /** Bir tam adım için biriken |rotasyon| eşiği ve slider adımının ölçeği. */
     private static final int STEP_DIVISOR = 40;
+    /** Klavye ⌘+/⌘− için her basışta slider adımının ölçeği (daha iri adım). */
+    private static final int KEY_STEP_DIVISOR = 20;
 
     private static final PrintStream LOG = DEBUG ? openLog() : null;
 
@@ -90,6 +94,9 @@ public final class MacZoom {
                     }
                 }
             }, AWTEvent.FOCUS_EVENT_MASK);
+            // Klavye ile zoom: ⌘+ / ⌘− slider'ı sürer (trackpad jestine ek).
+            KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                .addKeyEventDispatcher(MacZoom::dispatchKey);
             log("yüklendi CMD=0x" + Integer.toHexString(CMD));
         } catch (Throwable t) {
             // Agent asla uygulamayı düşürmemeli.
@@ -149,26 +156,71 @@ public final class MacZoom {
             return cached;
         }
 
-        private JSlider pick(List<JSlider> sliders) {
-            if (sliders.isEmpty()) return null;
-            if (sliders.size() == 1) return sliders.get(0);
-            // Birden fazlaysa: en alttaki yatay slider (durum çubuğu zoom'u).
-            JSlider best = null;
-            for (JSlider s : sliders) {
-                if (s.getOrientation() != JSlider.HORIZONTAL) continue;
-                if (best == null
-                        || s.getLocationOnScreen().y > best.getLocationOnScreen().y) {
-                    best = s;
-                }
-            }
-            return best != null ? best : sliders.get(0);
-        }
+    }
 
-        private void collect(Component c, List<JSlider> out) {
-            if (c instanceof JSlider && c.isShowing()) out.add((JSlider) c);
-            if (c instanceof Container) {
-                for (Component k : ((Container) c).getComponents()) collect(k, out);
+    // ——— Klavye ile zoom (⌘+ / ⌘−) ———
+
+    /** ⌘ basılıyken +/= → yakınlaştır, −/_ → uzaklaştır; olayı yutar. */
+    static boolean dispatchKey(KeyEvent e) {
+        try {
+            if ((e.getModifiersEx() & CMD) == 0) return false;
+            int dir;
+            switch (e.getKeyCode()) {
+                case KeyEvent.VK_EQUALS: case KeyEvent.VK_PLUS: case KeyEvent.VK_ADD:  dir = +1; break;
+                case KeyEvent.VK_MINUS:  case KeyEvent.VK_SUBTRACT:                    dir = -1; break;
+                default: return false;
             }
+            int id = e.getID();
+            if (id != KeyEvent.KEY_PRESSED && id != KeyEvent.KEY_RELEASED) return false;
+            if (id == KeyEvent.KEY_PRESSED) {
+                JSlider s = findSlider(e.getComponent());
+                if (s != null) bump(s, dir);
+            }
+            return true; // ⌘+/⌘− basma/bırakmayı yut
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static void bump(JSlider s, int dir) {
+        int range = s.getMaximum() - s.getMinimum();
+        int step = Math.max(1, range / KEY_STEP_DIVISOR);
+        // Bu slider'da düşük değer = yakınlaştır; ⌘+ (dir=+1) değeri DÜŞÜRMELİ.
+        int v = s.getValue() - dir * step;
+        v = Math.max(s.getMinimum(), Math.min(s.getMaximum(), v));
+        if (v != s.getValue()) { s.setValue(v); log("klavye zoom → " + v); }
+    }
+
+    private static JSlider findSlider(Component focus) {
+        Window w = (focus instanceof Window) ? (Window) focus
+                : (focus != null ? SwingUtilities.getWindowAncestor(focus) : null);
+        List<JSlider> sliders = new ArrayList<>();
+        if (w != null) collect(w, sliders);
+        if (sliders.isEmpty()) {
+            for (Window ww : Window.getWindows()) collect(ww, sliders);
+        }
+        return pick(sliders);
+    }
+
+    private static JSlider pick(List<JSlider> sliders) {
+        if (sliders.isEmpty()) return null;
+        if (sliders.size() == 1) return sliders.get(0);
+        // Birden fazlaysa: en alttaki yatay slider (durum çubuğu zoom'u).
+        JSlider best = null;
+        for (JSlider s : sliders) {
+            if (s.getOrientation() != JSlider.HORIZONTAL) continue;
+            if (best == null
+                    || s.getLocationOnScreen().y > best.getLocationOnScreen().y) {
+                best = s;
+            }
+        }
+        return best != null ? best : sliders.get(0);
+    }
+
+    private static void collect(Component c, List<JSlider> out) {
+        if (c instanceof JSlider && c.isShowing()) out.add((JSlider) c);
+        if (c instanceof Container) {
+            for (Component k : ((Container) c).getComponents()) collect(k, out);
         }
     }
 }

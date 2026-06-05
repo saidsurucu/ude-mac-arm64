@@ -63,6 +63,9 @@ public final class MacTextKeys {
     }
 
     private static void install() {
+        // UYAP'ın alışılmadık Ctrl kısayollarını standart Cmd kısayollarına bağla
+        // (Cmd+B→kalın, Cmd+I→italik, Cmd+U→altı çizili, Cmd+F→bul, Cmd+S→kaydet …).
+        MacShortcutRemap.install();
         try {
             Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
                 @Override public void eventDispatched(AWTEvent e) {
