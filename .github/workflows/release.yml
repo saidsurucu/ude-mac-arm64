@@ -31,9 +31,10 @@ jobs:
       - name: jpackage'lı 17+ JDK hazırla
         run: make jpackage-jdk
 
-      - name: Native arm64 .app üret
+      - name: Native arm64 .app üret (modern ikonlarla)
         env:
           UDE_URL: ${{ github.event.inputs.ude_url }}
+          ICONS: "1"   # modern Material + Retina ikonlar (scripts/icons/overrides)
         run: make all
 
       - name: Sürümü belirle (<ude_surumu>_<N>)
