@@ -4,6 +4,10 @@
 Mac'lerde **Rosetta olmadan** native çalıştırır. Java gömülü gelir; ayrıca bir şey
 kurmaya gerek yoktur ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 
+![UDE — modern Material ikonlar ve Retina'da keskin metin](assets/ekran-goruntusu.jpeg)
+
+> Modern Material ikonlar + Java 11 HiDPI ile **Retina'da keskin** metin ve arayüz.
+
 > Resmî değildir; hiçbir kamu kurumu tarafından geliştirilmemiş/onaylanmamıştır.
 > "Olduğu gibi" sunulur.
 
