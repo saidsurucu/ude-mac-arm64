@@ -1,8 +1,9 @@
 # UDE — Apple Silicon (arm64) Native
 
 [Uyap Doküman Editörü](https://uyap.gov.tr)'nü (UDE) Apple Silicon (M1/M2/M3/M4)
-Mac'lerde **Rosetta olmadan** native çalıştırır. Java gömülü gelir; ayrıca bir şey
-kurmaya gerek yoktur ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
+Mac'lerde **Rosetta olmadan** native çalıştırır. Rosetta çeviri katmanı olmadığı için
+**daha hızlı** açılır ve çalışır. Java gömülü gelir; ayrıca bir şey kurmaya gerek yoktur
+ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 
 ![UDE — modern Material ikonlar ve Retina'da keskin metin](assets/ekran-goruntusu.jpeg)
 
