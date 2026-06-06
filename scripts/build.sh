@@ -244,8 +244,8 @@ apply_icons() {  # $1=JAR — patch_jar içinden çağrılır
 	rm -rf "$BUILD/_iconpatch"; mkdir -p "$BUILD/_iconpatch/out"
 	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_iconpatch" "$ICONS_SRC/IconLoaderPatch.java" || die "[icons] patcher derlenemedi."
 	"$jr" -cp "$BUILD/_iconpatch:$jvs" IconLoaderPatch "$JAR" "$BUILD/_iconpatch/out" || die "[icons] patcher çalışmadı."
-	( cd "$BUILD/_iconpatch/out" && zip -q -r "$JAR" tr )
-	c_ok "[icons] Utils.b multi-resolution yaması uygulandı."
+	( cd "$BUILD/_iconpatch/out" && zip -q -r "$JAR" . -x '.*' )
+	c_ok "[icons] yamalar uygulandı (Utils.b multi-res + disabled soluklaştırma)."
 }
 
 apply_fop_fonts() {  # $1=JAR — patch_jar içinden çağrılır
