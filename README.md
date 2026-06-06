@@ -94,8 +94,7 @@ Artık **Launchpad** veya **Applications** klasöründen çift tıklayarak açab
 dosyalarına da çift tıklayıp açabilirsiniz. (Kendiniz derleyip imzaladığınız için macOS
 "geliştirici doğrulanamadı" uyarısı **çıkmaz**; `xattr` ile uğraşmanıza gerek yoktur.)
 
-> İsterseniz sürükle-bırak yerleşimli bir `.dmg` de üretebilirsiniz:
-> `brew install create-dmg` sonrası `make dmg`.
+**Yeni Editör sürümü çıktığında 2. adımdan itibaren adımları tekrarlamanız yeterli. En güncel sürüm otomatik inecek ve yamalanacak.**
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
 
