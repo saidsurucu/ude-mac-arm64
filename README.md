@@ -9,48 +9,98 @@ ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 
 > Modern Material ikonlar + Java 11 HiDPI ile **Retina'da keskin** metin ve arayüz.
 
-> Resmî değildir; hiçbir kamu kurumu tarafından geliştirilmemiş/onaylanmamıştır.
-> "Olduğu gibi" sunulur.
+> ⚠️ **Bu depo UYAP Doküman Editörü'nün kaynak kodunu içermez.** Tamamen bağımsız,
+> **gayriresmî** bir Mac **yamasıdır**: hiçbir kamu kurumu tarafından
+> geliştirilmemiş/onaylanmamıştır. Burada bulunan yalnızca yama ve build betikleridir;
+> resmî UDE paketi build sırasında uyap.gov.tr'den **siz** indirir ve yamayı uygulamanın
+> üstüne **siz** çalıştırırsınız. "Olduğu gibi" sunulur.
 
 > ✅ **E-imza çalışıyor:** Akıllı kart okuyucu algılaması (`5.4.17_4`+) çözüldü —
 > gömülü Java artık PCSC üzerinden kartı görüyor ve imzalama akışı baştan sona
 > çalışıyor. Belge açma/düzenleme de sorunsuz.
 
+> 📦 **Hazır (paketlenmiş) uygulama dağıtılmaz.** İşgüzarlarla uğraşmak istemediğim
+> için paketlenmiş hâlini dağıtmıyorum; uygulamayı **kendiniz derleyip paketlersiniz**.
+> Bu sayfada bir "Releases" / hazır indirme bağlantısı **bulmazsınız**. Aşağıdaki adımlar
+> derlemeyi olabildiğince kolaylaştırır — komutları kopyala-yapıştır ile çalıştırmanız yeterli.
+
 ---
 
-# 👩‍⚖️ Avukatlar için — Kurulum
+# 👩‍⚖️ Kolay kurulum — kendiniz derleyin
 
-Teknik bilgi gerektirmez. Java vb. kurmanıza **gerek yok**.
+Programcı olmanıza gerek yok; aşağıdaki komutları sırayla **kopyalayıp yapıştırmanız**
+yeterli. Java vb. ayrıca kurmanıza gerek yoktur — gereken Java sürümleri build sırasında
+**otomatik** indirilir.
 
-### 1) UDE uygulamasını indirin
+### 1) Geliştirici araçlarını kurun (bir kez)
 
-1. Bu sayfanın **sağ tarafında** **"Releases"** yazan başlığa tıklayın.
-   (Doğrudan gitmek için: [**en güncel sürüm**](../../releases/latest))
-2. Açılan sayfada aşağı inin; **"Assets"** bölümünün altında adı **`...arm64.dmg`**
-   ile biten dosyaya tıklayıp indirin.
-3. İndirdiğiniz **`.dmg`** dosyasına çift tıklayın; bir pencere açılır.
-4. Açılan pencerede **`Uyap Doküman Editörü`** simgesini, ortadaki okun gösterdiği gibi
-   yanındaki **Applications** klasörünün üzerine **sürükleyin**.
+**Terminal** uygulamasını açın: klavyede `Command (⌘) + Boşluk`'a basın, açılan kutuya
+**Terminal** yazıp **Enter**'a basın. Sonra şu satırı yapıştırıp **Enter**'a basın:
 
-### 2) İlk açılış (bir kez)
+```bash
+xcode-select --install
+```
 
-İlk açışta macOS **"geliştirici doğrulanamadı"** diyebilir. Bunu bir kez aşmak için:
+Bir pencere açılırsa **"Yükle"**ye basıp bitmesini bekleyin. (Zaten kuruluysa "already
+installed" der; sorun değil.)
 
-1. **Terminal** uygulamasını açın: klavyede `Command (⌘) + Boşluk`'a basın, açılan
-   kutuya **Terminal** yazıp **Enter**'a basın.
-2. Aşağıdaki satırı **olduğu gibi kopyalayın**, Terminal penceresine **yapıştırıp**
-   **Enter**'a basın:
-   ```
-   xattr -dr com.apple.quarantine "/Applications/Uyap Doküman Editörü.app"
-   ```
-3. Komut bir şey yazmadan biter; bu normaldir. Artık uygulamayı çift tıklayarak
-   açabilirsiniz. Bundan sonra `.udf` dosyalarına da çift tıklayıp açabilirsiniz.
+### 2) Kaynak kodu indirin
 
-> E-imza kullanacaksanız, akıllı kart / e-imza sürücünüzün de Apple Silicon (arm64)
-> sürümünün kurulu olması gerekir.
+İki yol var; **A yolu** en kolayıdır (tıkla-indir).
 
-#### ⚠️ Apple Silicon (arm64) AKİS sürücüsü kurulumu (e-imza için zorunlu)
+**A) ZIP olarak indirin (önerilir)**
 
+1. Şu sayfaya gidin: <https://github.com/saidsurucu/ude-mac-arm64>
+2. Sayfanın sağ üstündeki yeşil **`< > Code`** düğmesine tıklayın.
+3. Açılan menünün en altındaki **"Download ZIP"**e tıklayın. Dosya **İndirilenler**
+   (Downloads) klasörünüze iner (`ude-mac-arm64-main.zip`).
+4. İnen ZIP dosyasına **çift tıklayın**; yanında `ude-mac-arm64-main` adında bir klasör
+   açılır.
+
+Sonra **Terminal**'i açıp (`⌘ + Boşluk` → `Terminal` → Enter) şu satırı yapıştırın ve
+**Enter**'a basın — bu, az önce açılan klasörün içine girer:
+
+```bash
+cd ~/Downloads/ude-mac-arm64-main
+```
+
+**B) Tek komutla indirin (Terminal'i biliyorsanız)**
+
+```bash
+git clone https://github.com/saidsurucu/ude-mac-arm64.git
+cd ude-mac-arm64
+```
+
+### 3) Derleyin
+
+Klasöre girdikten sonra (yukarıdaki `cd …` adımı) aşağıdaki bloğun **tamamını**
+kopyalayıp Terminal'e yapıştırın, **Enter**'a basın:
+
+```bash
+make jdk           # gömülecek arm64 Java 11'i otomatik indirir
+make jpackage-jdk  # paketleyici JDK'yı otomatik indirir
+ICONS=1 make all   # uygulamayı derler + modern ikonlarla paketler + imzalar
+```
+
+İlk derleme internet hızınıza göre birkaç dakika sürebilir. Bittiğinde uygulama
+`build/Uyap Doküman Editörü.app` olarak hazırdır.
+
+### 4) Uygulamayı Applications'a taşıyın
+
+```bash
+mv "build/Uyap Doküman Editörü.app" /Applications/
+```
+
+Artık **Launchpad** veya **Applications** klasöründen çift tıklayarak açabilir, `.udf`
+dosyalarına da çift tıklayıp açabilirsiniz. (Kendiniz derleyip imzaladığınız için macOS
+"geliştirici doğrulanamadı" uyarısı **çıkmaz**; `xattr` ile uğraşmanıza gerek yoktur.)
+
+> İsterseniz sürükle-bırak yerleşimli bir `.dmg` de üretebilirsiniz:
+> `brew install create-dmg` sonrası `make dmg`.
+
+### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
+
+Akıllı kart / e-imza sürücünüzün de Apple Silicon (arm64) sürümünün kurulu olması gerekir.
 
 1. TÜBİTAK BİLGEM AKİS — Destek/İndirme sayfasından
    (<https://akiskart.bilgem.tubitak.gov.tr/destek/>) **"Mac OS Arm (Apple Silicon)"**
@@ -60,9 +110,10 @@ Teknik bilgi gerektirmez. Java vb. kurmanıza **gerek yok**.
 
 ---
 
-# 🛠️ Mühendisler için — Kaynaktan derleme
+# 🛠️ Mühendisler için — Teknik ayrıntı
 
-Hazır sürüme güvenmek yerine dönüşümü kendiniz çalıştırıp imzalayabilirsiniz.
+Yukarıdaki adımlar derlemek için yeterlidir. Bu bölüm, dönüşümün **neyi nasıl** çözdüğünü
+ve tek tek build hedeflerini açıklar.
 
 ## Neyi nasıl çözüyor
 
@@ -168,11 +219,12 @@ UDE_URL="https://rayp.adalet.gov.tr/.../yeni-paket.zip" make all
 
 > Uyarı: İleride paket yapısı (jar/sqlite sürümü) değişirse betiklerin güncellenmesi gerekebilir.
 
-## Otomatik release
+## CI build (isteğe bağlı)
 
 `.github/workflows/release.yml` (elle tetiklenir): macOS arm64 runner'da `make all`
-çalıştırır, `.app`'i imzayı bozmadan zip'ler ve **Release**'e ekler. Sürüm,
-UDE sürümünden türetilir: `<ude_surumu>_<N>` (ör. `5.4.17_1`).
+çalıştırır ve `.app`'i imzayı bozmadan zip'ler. Sürüm, UDE sürümünden türetilir:
+`<ude_surumu>_<N>` (ör. `5.4.17_1`). Bu yalnızca derlemenin doğrulanması/kişisel kullanım
+içindir; bu depo **hazır paket dağıtmaz** (bkz. en üstteki not).
 
 ---
 
