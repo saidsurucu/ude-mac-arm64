@@ -48,35 +48,14 @@ Teknik bilgi gerektirmez. Java vb. kurmanıza **gerek yok**.
 > E-imza kullanacaksanız, akıllı kart / e-imza sürücünüzün de Apple Silicon (arm64)
 > sürümünün kurulu olması gerekir.
 
-#### ⚠️ Apple Silicon (arm64) AKİS sürücüsü kurulumu (zorunlu)
+#### ⚠️ Apple Silicon (arm64) AKİS sürücüsü kurulumu (e-imza için zorunlu)
 
-Bu uygulama native **arm64** çalışır. Kart erişimi, sistemdeki AKİS PKCS#11 modülünü
-(`/usr/local/lib/libakisp11.dylib`) yükleyerek olur. Bir arm64 uygulama, yalnızca
-Intel (x86_64) derlenmiş bir sürücüyü yükleyemez (mimari uyuşmazlığı). TÜBİTAK
-AKİS'in macOS için ayrı **Intel** ve **Apple Silicon** paketleri vardır; çoğu
-kullanıcıda eski/Intel sürüm kuruludur.
-
-**Belirti:** Kart tipi olarak "Tubitak AKİS" seçip **DEVAM**'a basınca şu hata çıkar:
-
-> `/usr/local/lib/libakisp11.dylib kütüphanesi yüklenemedi. Lütfen doğru kart tipini`
-> `seçtiğinize ve akıllı kartınıza ait kurulumların doğru yapıldığına emin olun.`
-
-**Çözüm:** Apple Silicon AKİS paketini kurun:
 
 1. TÜBİTAK BİLGEM AKİS — Destek/İndirme sayfasından
    (<https://akiskart.bilgem.tubitak.gov.tr/destek/>) **"Mac OS Arm (Apple Silicon)"**
    başlığı altındaki güncel paketi indirin (ör. `Akia_macos_arm_6_8_9.pkg`).
    **"Mac OS Intel"** paketini değil, **Arm** paketini seçin.
 2. İndirilen `.pkg`'a çift tıklayıp kurulumu tamamlayın (yönetici şifresi ister).
-3. E-Devlet E-İmza uygulamasını kapatıp yeniden açın; kart takılıyken
-   **Kart Tipi: Tubitak AKİS** → **DEVAM**.
-
-**Doğru sürümü kurduğunuzu teyit:** Terminal'de şu komut `x86_64 arm64` (veya en
-azından `arm64`) yazmalı — sadece `x86_64` yazıyorsa hâlâ Intel sürüm kuruludur:
-
-```
-lipo -archs /usr/local/lib/libakisp11.dylib
-```
 
 ---
 
