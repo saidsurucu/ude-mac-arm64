@@ -50,11 +50,10 @@ installed" der; sorun değil.)
 
 **A) ZIP olarak indirin (önerilir)**
 
-1. Şu sayfaya gidin: <https://github.com/saidsurucu/ude-mac-arm64>
-2. Sayfanın sağ üstündeki yeşil **`< > Code`** düğmesine tıklayın.
-3. Açılan menünün en altındaki **"Download ZIP"**e tıklayın. Dosya **İndirilenler**
+1. Bu sayfanın sağ üstündeki yeşil **`< > Code`** düğmesine tıklayın.
+2. Açılan menünün en altındaki **"Download ZIP"**e tıklayın. Dosya **İndirilenler**
    (Downloads) klasörünüze iner (`ude-mac-arm64-main.zip`).
-4. İnen ZIP dosyasına **çift tıklayın**; yanında `ude-mac-arm64-main` adında bir klasör
+3. İnen ZIP dosyasına **çift tıklayın**; yanında `ude-mac-arm64-main` adında bir klasör
    açılır.
 
 Sonra **Terminal**'i açıp (`⌘ + Boşluk` → `Terminal` → Enter) şu satırı yapıştırın ve
@@ -95,8 +94,7 @@ Artık **Launchpad** veya **Applications** klasöründen çift tıklayarak açab
 dosyalarına da çift tıklayıp açabilirsiniz. (Kendiniz derleyip imzaladığınız için macOS
 "geliştirici doğrulanamadı" uyarısı **çıkmaz**; `xattr` ile uğraşmanıza gerek yoktur.)
 
-> İsterseniz sürükle-bırak yerleşimli bir `.dmg` de üretebilirsiniz:
-> `brew install create-dmg` sonrası `make dmg`.
+**Yeni Editör sürümü çıktığında 2. adımdan itibaren adımları tekrarlamanız yeterli. En güncel sürüm otomatik inecek ve yamalanacak.**
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
 
