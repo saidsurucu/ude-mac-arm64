@@ -27,7 +27,10 @@ package macostextkeys;
  *       gönderilir (Emacs bunlara dokunmaz).
  *
  * Not: Eklenti yıkıcı değildir; mevcut Ctrl kısayolları aynen çalışır (yalnız Cmd
- *   olayları dinlenir). İzin listesi olduğundan Cmd+Q/W/H/M'ye dokunulmaz.
+ *   olayları dinlenir). İzin listesi olduğundan Cmd+Q/H/M (çık/gizle/küçült) macOS'a
+ *   bırakılır; bunları sistem zaten doğru işler. Cmd+W ise Swing'de varsayılan olarak
+ *   hiçbir şeye bağlı değildir → odaktaki pencereye WINDOW_CLOSING gönderilir (UDE'de
+ *   "Kapat" menü öğesi yoktur; her belge kendi penceresidir).
  */
 
 import java.awt.Component;
@@ -39,6 +42,7 @@ import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,7 +64,7 @@ public final class MacShortcutRemap {
     private static final int REL = META | CTRL | SHIFT | ALT;
 
     /** Menü öğesi bulunamazsa uygulanacak yedek davranış. */
-    private enum Fb { SYNTHETIC, SELECT_ALL, COPY, PASTE, CUT, NONE }
+    private enum Fb { SYNTHETIC, SELECT_ALL, COPY, PASTE, CUT, CLOSE_WINDOW, NONE }
 
     /** Bir Cmd kısayolunun ne yapacağını tanımlayan kayıt. */
     private static final class Map {
@@ -105,6 +109,12 @@ public final class MacShortcutRemap {
 
         // — Bul —
         new Map(KeyEvent.VK_F, META,         "Bul",           0, 0, Fb.NONE),
+
+        // — Pencere kapat (macOS Cmd+W). UDE'de her belge kendi Frame'idir; "Kapat"
+        //   menü öğesi YOKTUR (yalnız "Çıkış" = tüm uygulama). Bu yüzden odaktaki
+        //   pencereye WINDOW_CLOSING gönderilir = kırmızı kapat düğmesiyle birebir aynı
+        //   (kaydedilmemişse uygulamanın kendi "kaydet?" akışı çalışır). —
+        new Map(KeyEvent.VK_W, META,         null,            0, 0, Fb.CLOSE_WINDOW),
 
         // — Yazı tipi paneli (macOS'ta ⌘T kelime işlemcilerde fontu açar) —
         new Map(KeyEvent.VK_T, META,         "Yazı Özellikleri", 0, 0, Fb.NONE),
@@ -162,6 +172,7 @@ public final class MacShortcutRemap {
             case COPY:       if (c instanceof JTextComponent) ((JTextComponent) c).copy();      break;
             case PASTE:      if (c instanceof JTextComponent) ((JTextComponent) c).paste();     break;
             case CUT:        if (c instanceof JTextComponent) ((JTextComponent) c).cut();       break;
+            case CLOSE_WINDOW: closeFocusedWindow(c);                                           break;
             case SYNTHETIC:  redispatch(c, e.getWhen(), m.dstKey, m.dstMods);                   break;
             case NONE:       /* Emacs gölgesi: yanlış hareket etmektense hiçbir şey yapma */    break;
         }
@@ -171,6 +182,18 @@ public final class MacShortcutRemap {
         Component c = e.getComponent();
         if (c == null) c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
         return c;
+    }
+
+    /**
+     * Odaktaki pencereyi, kullanıcı kırmızı kapat düğmesine basmış gibi kapatır:
+     * WINDOW_CLOSING gönderir → pencerenin kendi WindowListener'ı / defaultCloseOperation'ı
+     * çalışır (kaydedilmemiş belge için "kaydet?" sorusu dâhil). Sert dispose YAPMAZ.
+     */
+    private static void closeFocusedWindow(Component c) {
+        Window w = (c != null) ? SwingUtilities.getWindowAncestor(c) : null;
+        if (w == null) w = KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
+        if (w == null) return;
+        w.dispatchEvent(new WindowEvent(w, WindowEvent.WINDOW_CLOSING));
     }
 
     /** Hedef Ctrl kısayolunu sentetik olarak odaktaki bileşene gönder. */
