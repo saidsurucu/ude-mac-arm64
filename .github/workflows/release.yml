@@ -1,7 +1,10 @@
 name: Release (arm64 .app)
 
-# Elle tetiklenir. macOS arm64 runner'da native .app üretir, sürümü UDE
-# sürümünden (CFBundleVersion) türetir: <ude_surumu>_<N>  (ör. 5.4.17_1).
+# Elle tetiklenir. macOS arm64 runner'da native .app üretir.
+# UDE paketi SABİT değildir: build.sh her çalıştığında resmî indirme sayfasından
+# (www.uyap.gov.tr/Uyap-Editor) güncel MAC paketini (uyapdokumaneditoru*.zip) bulur.
+# Sürüm, indirilen paketin CFBundleVersion'ından türetilir: <ude_surumu>_<N> (ör. 5.4.17_1).
+# Böylece UDE yeni sürüm yayınladığında etiket otomatik o sürüme göre oluşur.
 # <N> her yeniden yayında otomatik artar (aynı UDE sürümü için).
 on:
   workflow_dispatch:
@@ -10,7 +13,7 @@ on:
         description: 'Revizyon numarası (boşsa otomatik = mevcut + 1)'
         required: false
       ude_url:
-        description: 'UDE paket URL (boşsa build.sh varsayılanı)'
+        description: 'UDE paket URL (boşsa resmî indirme sayfasından güncel MAC paketi otomatik bulunur)'
         required: false
 
 permissions:
