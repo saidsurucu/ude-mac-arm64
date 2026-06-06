@@ -1,5 +1,6 @@
 import javassist.ClassPool;
 import javassist.CtClass;
+import javassist.CtMethod;
 import javassist.expr.ExprEditor;
 import javassist.expr.MethodCall;
 
@@ -23,6 +24,15 @@ import java.io.FileOutputStream;
  * macosfop.FopFonts sınıfı bu yamadan ÖNCE jar'a eklenmiş olmalıdır (build.sh
  * sırası bunu garanti eder), aksi halde Javassist köprü ifadesini derleyemez.
  *
+ * Ayrıca iText (com.lowagie) tabanlı dışa aktarım yolunun font eşleyicisini de yamalar:
+ *   tr.com.havelsan.uyap.system.editor.b.c  (com.lowagie.text.pdf.FontMapper)
+ *     public BaseFont awtToPdf(java.awt.Font)
+ * gövdesi  return macosfop.ITextFonts.map($1);  ile değiştirilir → AWT fontu gömülü,
+ * Identity-H, tam Unicode bir BaseFont'a eşlenir (entegrasyon/TrayUtils.udfToPdf yolu;
+ * base-14 yüzünden büyük İ'nin Acrobat'ta görünmemesi giderilir).
+ *
+ * macosfop.FopFonts ve macosfop.ITextFonts bu yamadan ÖNCE jar'a eklenmiş olmalıdır.
+ *
  * Argümanlar: <editor-app.jar> <out-dir>
  */
 public class FopConfigPatch {
@@ -37,32 +47,40 @@ public class FopConfigPatch {
         ClassPool pool = ClassPool.getDefault();
         pool.insertClassPath(jar);
 
+        // --- 1) FOP yolu (b/a): newInstance → FopFonts.apply ---
         CtClass drv = pool.get("tr.com.havelsan.uyap.system.editor.b.a");
-
         final boolean[] hit = {false};
         drv.instrument(new ExprEditor() {
             @Override
             public void edit(MethodCall mc) throws javassist.CannotCompileException {
                 if ("org.apache.fop.apps.FopFactory".equals(mc.getClassName())
                         && "newInstance".equals(mc.getMethodName())) {
-                    // $_ = yeni FopFactory; üretildikten sonra font config'i uygula.
                     mc.replace("{ $_ = $proceed($$); macosfop.FopFonts.apply($_); }");
                     hit[0] = true;
                 }
             }
         });
-
         if (!hit[0]) {
             throw new IllegalStateException(
                 "FopFactory.newInstance() çağrısı bulunamadı — UDE sürümü değişmiş olabilir.");
         }
+        write(outDir, "tr/com/havelsan/uyap/system/editor/b/a.class", drv.toBytecode());
+        System.out.println("[FopConfigPatch] b/a: newInstance → FopFonts.apply köprüsü yazıldı.");
 
-        byte[] code = drv.toBytecode();
-        File f = new File(outDir, "tr/com/havelsan/uyap/system/editor/b/a.class");
+        // --- 2) iText yolu (b/c FontMapper): awtToPdf → ITextFonts.map (gömülü font) ---
+        CtClass mapper = pool.get("tr.com.havelsan.uyap.system.editor.b.c");
+        CtMethod awtToPdf = mapper.getMethod(
+            "awtToPdf", "(Ljava/awt/Font;)Lcom/lowagie/text/pdf/BaseFont;");
+        awtToPdf.setBody("{ return macosfop.ITextFonts.map($1); }");
+        write(outDir, "tr/com/havelsan/uyap/system/editor/b/c.class", mapper.toBytecode());
+        System.out.println("[FopConfigPatch] b/c: awtToPdf → ITextFonts.map (gömülü) yazıldı.");
+    }
+
+    private static void write(File outDir, String relPath, byte[] code) throws Exception {
+        File f = new File(outDir, relPath);
         f.getParentFile().mkdirs();
         try (FileOutputStream fos = new FileOutputStream(f)) {
             fos.write(code);
         }
-        System.out.println("[FopConfigPatch] b/a: newInstance → FopFonts.apply köprüsü yazıldı.");
     }
 }
