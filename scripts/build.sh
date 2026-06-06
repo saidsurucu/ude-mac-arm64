@@ -274,15 +274,16 @@ LiberationSans-BoldItalic.ttf:libsans-bolditalic.xml"
 	done <<< "$libmap"
 	c_ok "[fop] $(ls "$fdir"/Liberation*.ttf 2>/dev/null | wc -l | tr -d ' ') gömülü yedek font (Liberation) pakete eklendi."
 
-	# 2) Runtime yardımcı sınıfı (macosfop.FopFonts) derle + jar'a enjekte et
-	#    (FopFactory için derleme classpath'i = JAR)
+	# 2) Runtime yardımcı sınıfları (macosfop.FopFonts + macosfop.ITextFonts) derle + jar'a enjekte et
+	#    (FopFactory/BaseFont için derleme classpath'i = JAR)
 	rm -rf "$BUILD/_fophelper"; mkdir -p "$BUILD/_fophelper"
-	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_fophelper" "$FOP_SRC/macosfop/FopFonts.java" \
-		|| { c_warn "[fop] FopFonts derlenemedi; yama atlandı."; return 0; }
+	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_fophelper" \
+		"$FOP_SRC/macosfop/FopFonts.java" "$FOP_SRC/macosfop/ITextFonts.java" \
+		|| { c_warn "[fop] yardımcı sınıflar derlenemedi; yama atlandı."; return 0; }
 	( cd "$BUILD/_fophelper" && zip -q -r "$JAR" macosfop )
 
-	# 3) FOP sürücüsünü (b/a) Javassist ile yamala: newInstance sonrası FopFonts.apply
-	#    (FopFonts jar'a 2. adımda eklendi → Javassist köprü ifadesini derleyebilir)
+	# 3) Sürücüleri Javassist ile yamala: FOP (b/a) newInstance→FopFonts.apply ve
+	#    iText FontMapper (b/c) awtToPdf→ITextFonts.map (yardımcılar 2. adımda eklendi)
 	rm -rf "$BUILD/_foppatch"; mkdir -p "$BUILD/_foppatch/out"
 	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_foppatch" "$FOP_SRC/FopConfigPatch.java" \
 		|| { c_warn "[fop] FopConfigPatch derlenemedi; yama atlandı."; return 0; }
