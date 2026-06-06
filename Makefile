@@ -3,7 +3,7 @@
 
 SH := bash scripts/build.sh
 
-.PHONY: all check-deps jdk jpackage-jdk download deps shim zoom patch package sign clean distclean help
+.PHONY: all check-deps jdk jpackage-jdk download deps shim zoom patch package sign dmg clean distclean help
 
 all: ## ARM64 .app'i üret (varsayılan)
 	@$(SH) all
@@ -37,6 +37,9 @@ package: ## jpackage ile .app üret (Java 11 + shim, .udf ilişkilendirmeli)
 
 sign: ## ad-hoc codesign
 	@$(SH) sign
+
+dmg: ## sürükle-bırak yerleşimli .dmg üret (create-dmg gerekir)
+	@$(SH) dmg
 
 clean: ## build/ sil (indirilenleri korur)
 	@$(SH) clean

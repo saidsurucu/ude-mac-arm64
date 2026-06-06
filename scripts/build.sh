@@ -296,6 +296,33 @@ sign() {
 	codesign --verify --strict "$APP" 2>/dev/null && c_ok "İmza geçerli (adhoc, strict)" || die "İmza doğrulanamadı."
 }
 
+# Sürükle-bırak yerleşimli .dmg üret (arka plan: assets/dmg-background.tiff).
+# İkon konumları arka plandaki boş yuvalarla eşleşir: uygulama (170,220), Applications (490,220).
+# DMG_OUT ile çıktı yolu özelleştirilebilir (CI sürüm etiketli ad verir).
+dmg() {
+	[ -d "$APP" ] || die "Önce 'package' (+ 'sign') çalıştır."
+	command -v create-dmg >/dev/null || die "create-dmg yok → brew install create-dmg"
+	local bg="$ROOT/assets/dmg-background.tiff"
+	[ -f "$bg" ] || die "DMG arka planı yok: $bg (assets/dmg-background.svg'den üret)"
+	local out="${DMG_OUT:-$BUILD/$ASCII_NAME-arm64.dmg}"
+	rm -f "$out"
+	c_info "DMG üretiliyor (sürükle-bırak yerleşimi)…"
+	create-dmg \
+		--volname "$APP_NAME" \
+		--background "$bg" \
+		--window-pos 200 120 \
+		--window-size 660 440 \
+		--icon-size 120 \
+		--icon "$APP_NAME.app" 170 220 \
+		--app-drop-link 490 220 \
+		--hide-extension "$APP_NAME.app" \
+		--no-internet-enable \
+		"$out" "$APP" \
+		|| die "create-dmg başarısız."
+	[ -f "$out" ] || die "DMG üretilemedi."
+	c_ok "DMG: $out ($(du -sh "$out" | cut -f1))"
+}
+
 all() {
 	check_deps || die "Ön koşul eksik (jdk / jpackage-jdk)."
 	download; deps; shim; textkeys; zoom; patch_jar; package; sign
@@ -325,6 +352,7 @@ Hedefler:
   patch        editor-app.jar yamala (sqlite swap + eawt çıkar)
   package      jpackage ile .app üret (Java 11 + shim, .udf ilişkilendirmeli)
   sign         ad-hoc codesign
+  dmg          sürükle-bırak yerleşimli .dmg üret (create-dmg; DMG_OUT ile ad)
   clean / distclean
 
 Ortam: UDE_URL / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
@@ -335,7 +363,7 @@ EOF
 case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
 	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; patch) patch_jar ;;
-	package) package ;; sign) sign ;; clean) clean ;; distclean) distclean ;;
+	package) package ;; sign) sign ;; dmg) dmg ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
 	*) die "Bilinmeyen hedef: $1  (scripts/build.sh help)" ;;
 esac

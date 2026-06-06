@@ -26,10 +26,11 @@ Teknik bilgi gerektirmez. Java vb. kurmanıza **gerek yok**.
 
 1. Bu sayfanın **sağ tarafında** **"Releases"** yazan başlığa tıklayın.
    (Doğrudan gitmek için: [**en güncel sürüm**](../../releases/latest))
-2. Açılan sayfada aşağı inin; **"Assets"** bölümünün altında adı **`...arm64.zip`**
+2. Açılan sayfada aşağı inin; **"Assets"** bölümünün altında adı **`...arm64.dmg`**
    ile biten dosyaya tıklayıp indirin.
-3. İndirdiğiniz zip dosyasına çift tıklayın; içinden **`Uyap Doküman Editörü.app`** çıkar.
-4. Çıkan bu uygulamayı **Uygulamalar (Applications)** klasörüne sürükleyin.
+3. İndirdiğiniz **`.dmg`** dosyasına çift tıklayın; bir pencere açılır.
+4. Açılan pencerede **`Uyap Doküman Editörü`** simgesini, ortadaki okun gösterdiği gibi
+   yanındaki **Applications** klasörünün üzerine **sürükleyin**.
 
 ### 2) İlk açılış (bir kez)
 
