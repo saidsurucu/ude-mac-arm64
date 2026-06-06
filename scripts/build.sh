@@ -43,8 +43,16 @@ ASCII_NAME="UyapDokumanEditoru"     # executable/CFBundleExecutable (ASCII şart
 BUNDLE_ID="tr.gov.uyap.editor"
 MAIN_CLASS="tr.com.havelsan.uyap.system.editor.common.WPAppManager"
 
-UDE_URL="${UDE_URL:-https://rayp.adalet.gov.tr/resimler/2/dosya/uyapdokumaneditoru01-06-20263-07-pm.zip}"
+# UDE paketi SABİT bir URL değildir: her sürümde dosya adı değişir (tarih kodlu).
+# Bu yüzden URL'yi resmî indirme sayfasından dinamik çözeriz (resolve_ude_url).
+# UDE_URL elle verilirse (env) o kullanılır, sayfa hiç sorgulanmaz.
+UDE_URL="${UDE_URL:-}"
 UDE_ZIP="${UDE_ZIP:-$DOWNLOADS/ude.zip}"
+# MAC paketinin (uyapdokumaneditoru*.zip) listelendiği resmî sayfa.
+UDE_DOWNLOAD_PAGE="${UDE_DOWNLOAD_PAGE:-https://www.uyap.gov.tr/Uyap-Editor}"
+# UDE'nin kendisinin sürüm kontrolü yaptığı uç nokta. Yanıtın
+# 'Content-Disposition: filename="X.Y.Z.release"' header'ından güncel sürümü verir.
+UDE_UPDATE_ENDPOINT="${UDE_UPDATE_ENDPOINT:-http://editor.uyap.gov.tr/editorUpdaterYeni}"
 
 SQLITE_VER="${SQLITE_VER:-3.46.1.3}"
 SQLITE_JAR="$VENDOR/sqlite-jdbc-$SQLITE_VER.jar"
@@ -139,11 +147,43 @@ jpackage_jdk() {
 	find_jpackage >/dev/null 2>&1 && c_ok "jpackage hazır." || die "jpackage bulunamadı."
 }
 
+# UDE'nin kendi sürüm kontrol uç noktasından güncel sürümü okur (ör. 5.4.17).
+# Sadece bilgi/çapraz-doğrulama amaçlıdır; başarısız olursa boş döner (build durmaz).
+latest_ude_version() {
+	curl -fsSL -m 20 -I "$UDE_UPDATE_ENDPOINT" 2>/dev/null \
+		| tr -d '\r' \
+		| sed -n 's/.*filename="\{0,1\}\([0-9][0-9.]*\)\.release"\{0,1\}.*/\1/p' \
+		| head -1
+}
+
+# Resmî indirme sayfasından güncel MAC paketinin (uyapdokumaneditoru*.zip) URL'sini çözer.
+resolve_ude_url() {
+	[ -n "$UDE_URL" ] && { echo "$UDE_URL"; return 0; }
+	c_info "Güncel MAC paketi çözülüyor: $UDE_DOWNLOAD_PAGE" >&2
+	local href
+	href="$(curl -fsSL -m 30 "$UDE_DOWNLOAD_PAGE" 2>/dev/null \
+		| grep -aoE '(https?:)?//rayp\.adalet\.gov\.tr/[^"'"'"' >]*uyapdokumaneditoru[^"'"'"' >]*\.zip' \
+		| head -1)"
+	[ -n "$href" ] || die "Güncel MAC paketi indirme sayfasında bulunamadı (sayfa yapısı değişmiş olabilir). UDE_URL ile elle verebilirsiniz."
+	case "$href" in
+		//*)  href="https:$href" ;;
+		http*) ;;
+	esac
+	echo "$href"
+}
+
 download() {
 	c_info "Kaynak paket hazırlanıyor…"
 	mkdir -p "$DOWNLOADS" "$BUILD"
-	[ -s "$UDE_ZIP" ] && c_ok "Önbellekten: $UDE_ZIP ($(du -h "$UDE_ZIP" | cut -f1))" \
-		|| { c_info "İndiriliyor: $UDE_URL"; curl -fL --retry 3 -o "$UDE_ZIP" "$UDE_URL"; }
+	if [ -s "$UDE_ZIP" ]; then
+		c_ok "Önbellekten: $UDE_ZIP ($(du -h "$UDE_ZIP" | cut -f1))"
+	else
+		local lv; lv="$(latest_ude_version)"
+		[ -n "$lv" ] && c_info "UDE'nin bildirdiği güncel sürüm: $lv"
+		UDE_URL="$(resolve_ude_url)"
+		c_info "İndiriliyor: $UDE_URL"
+		curl -fL --retry 3 -o "$UDE_ZIP" "$UDE_URL"
+	fi
 	rm -rf "$SRC_APP_DIR"; mkdir -p "$SRC_APP_DIR"
 	local stage; stage="$(mktemp -d)"
 	( cd "$stage" && unzip -q "$UDE_ZIP" )
@@ -447,7 +487,8 @@ Hedefler:
   dmg          sürükle-bırak yerleşimli .dmg üret (create-dmg; DMG_OUT ile ad)
   clean / distclean
 
-Ortam: UDE_URL / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
+Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözülür)
+       UDE_DOWNLOAD_PAGE / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
        ICONS (boş|1; modern ikon override + HiDPI yükleyici yaması)
        FOPFONTS (1=açık varsayılan | 0=kapalı; PDF dışa aktarımda Türkçe harf
                  düzeltmesi — FOP'a gömülü macOS Arial/Times fontları tanıtılır)
