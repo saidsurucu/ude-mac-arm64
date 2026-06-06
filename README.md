@@ -70,31 +70,41 @@ git clone https://github.com/saidsurucu/ude-mac-arm64.git
 cd ude-mac-arm64
 ```
 
-### 3) Derleyin
+### 3) Tek komutla derleyip kurun
 
-Klasöre girdikten sonra (yukarıdaki `cd …` adımı) aşağıdaki bloğun **tamamını**
-kopyalayıp Terminal'e yapıştırın, **Enter**'a basın:
+Klasöre girdikten sonra (yukarıdaki `cd …` adımı) şu **tek satırı** yapıştırıp
+**Enter**'a basmanız yeterli:
+
+```bash
+./kur.sh
+```
+
+`kur.sh` gerisini sizin için yapar: geliştirici araçlarını kurar (gerekiyorsa),
+Java sürümlerini **otomatik** indirir, uygulamayı modern ikonlarla derleyip imzalar ve
+bitince doğrudan **/Applications** klasörüne kurar. İlk derleme internet hızınıza göre
+birkaç dakika sürebilir.
+
+> Eğer `permission denied` derse bir kez `chmod +x kur.sh` çalıştırıp `./kur.sh`'yi
+> tekrar deneyin.
+
+Bittiğinde uygulama **Launchpad** ve **Applications** klasöründe hazırdır; çift tıklayarak
+ya da `.udf` dosyalarına çift tıklayarak açabilirsiniz. (Kendiniz derleyip imzaladığınız
+için macOS "geliştirici doğrulanamadı" uyarısı **çıkmaz**; `xattr` ile uğraşmanıza gerek
+yoktur.)
+
+**Yeni Editör sürümü çıktığında 2. adımdan itibaren adımları tekrarlamanız yeterli. En güncel sürüm otomatik inecek ve yamalanacak.**
+
+<details>
+<summary>Tek tek komutlarla yapmayı tercih ederseniz (kur.sh yerine)</summary>
 
 ```bash
 make jdk           # gömülecek arm64 Java 11'i otomatik indirir
 make jpackage-jdk  # paketleyici JDK'yı otomatik indirir
 ICONS=1 make all   # uygulamayı derler + modern ikonlarla paketler + imzalar
-```
-
-İlk derleme internet hızınıza göre birkaç dakika sürebilir. Bittiğinde uygulama
-`build/Uyap Doküman Editörü.app` olarak hazırdır.
-
-### 4) Uygulamayı Applications'a taşıyın
-
-```bash
 mv "build/Uyap Doküman Editörü.app" /Applications/
 ```
 
-Artık **Launchpad** veya **Applications** klasöründen çift tıklayarak açabilir, `.udf`
-dosyalarına da çift tıklayıp açabilirsiniz. (Kendiniz derleyip imzaladığınız için macOS
-"geliştirici doğrulanamadı" uyarısı **çıkmaz**; `xattr` ile uğraşmanıza gerek yoktur.)
-
-**Yeni Editör sürümü çıktığında 2. adımdan itibaren adımları tekrarlamanız yeterli. En güncel sürüm otomatik inecek ve yamalanacak.**
+</details>
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
 
