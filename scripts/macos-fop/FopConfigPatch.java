@@ -74,6 +74,27 @@ public class FopConfigPatch {
         awtToPdf.setBody("{ return macosfop.ITextFonts.map($1); }");
         write(outDir, "tr/com/havelsan/uyap/system/editor/b/c.class", mapper.toBytecode());
         System.out.println("[FopConfigPatch] b/c: awtToPdf → ITextFonts.map (gömülü) yazıldı.");
+
+        // --- 3) iText yolu sayfa boyutu (b/b): at.getPageFormat sonucunu A4'e sabitle ---
+        //     (footer'ın alttan kesilmesi = asimetrik kenar yüzünden kısa sayfa hesabı)
+        CtClass conv = pool.get("tr.com.havelsan.uyap.system.editor.b.b");
+        final boolean[] pfHit = {false};
+        conv.instrument(new ExprEditor() {
+            @Override
+            public void edit(MethodCall mc) throws javassist.CannotCompileException {
+                if ("tr.com.havelsan.uyap.system.swing.wp.b.at".equals(mc.getClassName())
+                        && "getPageFormat".equals(mc.getMethodName())) {
+                    mc.replace("{ $_ = macosfop.PageFix.a4($proceed($$)); }");
+                    pfHit[0] = true;
+                }
+            }
+        });
+        if (!pfHit[0]) {
+            throw new IllegalStateException(
+                "b/b'de at.getPageFormat çağrısı bulunamadı — UDE sürümü değişmiş olabilir.");
+        }
+        write(outDir, "tr/com/havelsan/uyap/system/editor/b/b.class", conv.toBytecode());
+        System.out.println("[FopConfigPatch] b/b: at.getPageFormat → PageFix.a4 (A4 zorla) yazıldı.");
     }
 
     private static void write(File outDir, String relPath, byte[] code) throws Exception {

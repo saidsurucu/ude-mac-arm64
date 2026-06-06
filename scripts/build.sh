@@ -278,7 +278,7 @@ LiberationSans-BoldItalic.ttf:libsans-bolditalic.xml"
 	#    (FopFactory/BaseFont için derleme classpath'i = JAR)
 	rm -rf "$BUILD/_fophelper"; mkdir -p "$BUILD/_fophelper"
 	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_fophelper" \
-		"$FOP_SRC/macosfop/FopFonts.java" "$FOP_SRC/macosfop/ITextFonts.java" \
+		"$FOP_SRC/macosfop/FopFonts.java" "$FOP_SRC/macosfop/ITextFonts.java" "$FOP_SRC/macosfop/PageFix.java" \
 		|| { c_warn "[fop] yardımcı sınıflar derlenemedi; yama atlandı."; return 0; }
 	( cd "$BUILD/_fophelper" && zip -q -r "$JAR" macosfop )
 
