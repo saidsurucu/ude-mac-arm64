@@ -32,7 +32,10 @@ SHIM_SRC="$SCRIPT_DIR/eawt-shim"
 ICONS_SRC="$SCRIPT_DIR/icons"
 TEXTKEYS_SRC="$SCRIPT_DIR/macos-textkeys"
 ZOOM_SRC="$SCRIPT_DIR/macos-zoom"
+FOP_SRC="$SCRIPT_DIR/macos-fop"
+FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
+FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -205,6 +208,67 @@ apply_icons() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[icons] Utils.b multi-resolution yaması uygulandı."
 }
 
+apply_fop_fonts() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$FOPFONTS" = "1" ] || return 0
+	# İdempotans: zaten yamalıysa tekrar sarma (b/a newInstance çift sarılmasın)
+	unzip -l "$JAR" 2>/dev/null | grep -q 'macosfop/FopFonts.class' && { c_ok "[fop] zaten yamalı, atlandı."; return 0; }
+	c_info "[fop] PDF Türkçe harf yaması (FOP setUserConfig + gömülü Arial/Times)…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[fop] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[fop] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ikon yamasıyla ortak)
+
+	# 1) macOS sistem fontlarından FOP metrik XML'leri üret (TTFReader jar içinde)
+	local fdir="$BUILD/_fopfonts"; rm -rf "$fdir"; mkdir -p "$fdir"
+	#       çıktı.xml                 Supplemental TTF adı
+	local map="
+arial.xml:Arial.ttf
+arial-bold.xml:Arial Bold.ttf
+arial-italic.xml:Arial Italic.ttf
+arial-bolditalic.xml:Arial Bold Italic.ttf
+times.xml:Times New Roman.ttf
+times-bold.xml:Times New Roman Bold.ttf
+times-italic.xml:Times New Roman Italic.ttf
+times-bolditalic.xml:Times New Roman Bold Italic.ttf"
+	local line out ttf
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		out="${line%%:*}"; ttf="$FOP_SUP/${line#*:}"
+		[ -f "$ttf" ] || { c_warn "[fop] sistem fontu yok: $ttf (atlandı)"; continue; }
+		"$jr" -cp "$JAR" org.apache.fop.fonts.apps.TTFReader "$ttf" "$fdir/$out" >/dev/null 2>&1 \
+			|| c_warn "[fop] metrik üretilemedi: $out"
+	done <<< "$map"
+	if [ -z "$(ls "$fdir"/*.xml 2>/dev/null)" ]; then
+		# Build makinesinde sistem fontları yoksa (bazı CI runner'ları) repodaki
+		# hazır metrikleri kullan. Gömme yine çalışma zamanında KULLANICININ
+		# /System/Library/Fonts/Supplemental fontlarıyla yapılır; metrik yalnız genişlik içindir.
+		if [ -n "$(ls "$FOP_SRC/fopfonts/"*.xml 2>/dev/null)" ]; then
+			cp "$FOP_SRC/fopfonts/"*.xml "$fdir/" && c_warn "[fop] sistem fontu üretilemedi; repodaki hazır metrikler kullanıldı."
+		else
+			c_warn "[fop] metrik yok (ne üretildi ne repoda); yama atlandı."; return 0
+		fi
+	fi
+	c_ok "[fop] $(ls "$fdir"/*.xml | wc -l | tr -d ' ') font metriği hazır."
+
+	# 2) Runtime yardımcı sınıfı (macosfop.FopFonts) derle + jar'a enjekte et
+	#    (FopFactory için derleme classpath'i = JAR)
+	rm -rf "$BUILD/_fophelper"; mkdir -p "$BUILD/_fophelper"
+	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_fophelper" "$FOP_SRC/macosfop/FopFonts.java" \
+		|| { c_warn "[fop] FopFonts derlenemedi; yama atlandı."; return 0; }
+	( cd "$BUILD/_fophelper" && zip -q -r "$JAR" macosfop )
+
+	# 3) FOP sürücüsünü (b/a) Javassist ile yamala: newInstance sonrası FopFonts.apply
+	#    (FopFonts jar'a 2. adımda eklendi → Javassist köprü ifadesini derleyebilir)
+	rm -rf "$BUILD/_foppatch"; mkdir -p "$BUILD/_foppatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_foppatch" "$FOP_SRC/FopConfigPatch.java" \
+		|| { c_warn "[fop] FopConfigPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_foppatch:$jvs" FopConfigPatch "$JAR" "$BUILD/_foppatch/out" \
+		|| die "[fop] b/a yamalanamadı (UDE sürümü değişmiş olabilir)."
+	( cd "$BUILD/_foppatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[fop] PDF Türkçe harf yaması uygulandı (metrikler package'da pakete konur)."
+}
+
 patch_jar() {
 	local JAR="$SRC_APP_DIR/app/Contents/Java/editor-app.jar"
 	[ -s "$JAR" ] || die "Önce 'download' çalıştır."
@@ -219,6 +283,7 @@ patch_jar() {
 	# Gömülü (Java 8 native-bağımlı) com.apple.eawt/eio sınıflarını çıkar (shim sağlayacak)
 	zip -q -d "$JAR" 'com/apple/eawt/*' 'com/apple/eio/*' >/dev/null 2>&1 || true
 	apply_icons "$JAR"
+	apply_fop_fonts "$JAR"
 	unzip -l "$JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
 	c_ok "jar yamalandı (sqlite 3.46 + eawt çıkarıldı)"
@@ -237,6 +302,9 @@ package() {
 	local JAVA="$SRC_APP_DIR/app/Contents/Java"
 	local in="$BUILD/_input"; rm -rf "$in"; mkdir -p "$in"
 	cp "$JAVA/editor-app.jar" "$in/"
+	# PDF Türkçe harf yaması: FOP metrik XML'leri Contents/app/fopfonts'a (jar yanına) →
+	# çalışma zamanında FopFonts bunları CodeSource'tan bulup setUserConfig'e verir.
+	[ -d "$BUILD/_fopfonts" ] && { mkdir -p "$in/fopfonts"; cp "$BUILD/_fopfonts/"*.xml "$in/fopfonts/" 2>/dev/null || true; }
 	cp "$JAVA/"*.gif "$in/" 2>/dev/null || true
 	cp "$JAVA/"*.ico "$in/" 2>/dev/null || true
 	cp "$JAVA/BENIOKU.txt" "$in/" 2>/dev/null || true
@@ -357,12 +425,15 @@ Hedefler:
 
 Ortam: UDE_URL / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
        ICONS (boş|1; modern ikon override + HiDPI yükleyici yaması)
+       FOPFONTS (1=açık varsayılan | 0=kapalı; PDF dışa aktarımda Türkçe harf
+                 düzeltmesi — FOP'a gömülü macOS Arial/Times fontları tanıtılır)
 EOF
 }
 
 case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
 	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; patch) patch_jar ;;
+	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	package) package ;; sign) sign ;; dmg) dmg ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
 	*) die "Bilinmeyen hedef: $1  (scripts/build.sh help)" ;;
