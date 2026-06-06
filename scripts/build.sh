@@ -249,7 +249,30 @@ times-bolditalic.xml:Times New Roman Bold Italic.ttf"
 			c_warn "[fop] metrik yok (ne üretildi ne repoda); yama atlandı."; return 0
 		fi
 	fi
-	c_ok "[fop] $(ls "$fdir"/*.xml | wc -l | tr -d ' ') font metriği hazır."
+	c_ok "[fop] $(ls "$fdir"/*.xml | wc -l | tr -d ' ') sistem font metriği hazır."
+
+	# 1b) Gömülü yedek font: Liberation Serif/Sans (OFL; Times/Arial metrik-uyumlu, tam Türkçe).
+	#     Sistemde Times/Arial OLMAYAN Mac'lerde kullanılır (hibrit). TTF'ler pakete konur,
+	#     metrikleri buradan üretilir → metrik gömülen TTF ile birebir eşleşir.
+	local libmap="
+LiberationSerif-Regular.ttf:libserif.xml
+LiberationSerif-Bold.ttf:libserif-bold.xml
+LiberationSerif-Italic.ttf:libserif-italic.xml
+LiberationSerif-BoldItalic.ttf:libserif-bolditalic.xml
+LiberationSans-Regular.ttf:libsans.xml
+LiberationSans-Bold.ttf:libsans-bold.xml
+LiberationSans-Italic.ttf:libsans-italic.xml
+LiberationSans-BoldItalic.ttf:libsans-bolditalic.xml"
+	local lttf lout lsrc
+	while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		lttf="${line%%:*}"; lout="${line#*:}"; lsrc="$FOP_SRC/fonts/$lttf"
+		[ -f "$lsrc" ] || { c_warn "[fop] gömülü font yok: $lsrc (atlandı)"; continue; }
+		cp "$lsrc" "$fdir/$lttf"
+		"$jr" -cp "$JAR" org.apache.fop.fonts.apps.TTFReader "$lsrc" "$fdir/$lout" >/dev/null 2>&1 \
+			|| c_warn "[fop] Liberation metriği üretilemedi: $lout"
+	done <<< "$libmap"
+	c_ok "[fop] $(ls "$fdir"/Liberation*.ttf 2>/dev/null | wc -l | tr -d ' ') gömülü yedek font (Liberation) pakete eklendi."
 
 	# 2) Runtime yardımcı sınıfı (macosfop.FopFonts) derle + jar'a enjekte et
 	#    (FopFactory için derleme classpath'i = JAR)
@@ -304,7 +327,7 @@ package() {
 	cp "$JAVA/editor-app.jar" "$in/"
 	# PDF Türkçe harf yaması: FOP metrik XML'leri Contents/app/fopfonts'a (jar yanına) →
 	# çalışma zamanında FopFonts bunları CodeSource'tan bulup setUserConfig'e verir.
-	[ -d "$BUILD/_fopfonts" ] && { mkdir -p "$in/fopfonts"; cp "$BUILD/_fopfonts/"*.xml "$in/fopfonts/" 2>/dev/null || true; }
+	[ -d "$BUILD/_fopfonts" ] && { mkdir -p "$in/fopfonts"; cp "$BUILD/_fopfonts/"* "$in/fopfonts/" 2>/dev/null || true; }
 	cp "$JAVA/"*.gif "$in/" 2>/dev/null || true
 	cp "$JAVA/"*.ico "$in/" 2>/dev/null || true
 	cp "$JAVA/BENIOKU.txt" "$in/" 2>/dev/null || true
