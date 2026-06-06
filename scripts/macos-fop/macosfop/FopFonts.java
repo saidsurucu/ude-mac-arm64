@@ -16,53 +16,66 @@ import java.io.Writer;
  * Sorun: UDE'nin FOP sürücüsü (tr.com.havelsan...editor.b.a) FopFactory'yi font
  * yapılandırması OLMADAN kurar. FOP base-14 standart PDF fontlarına (WinAnsi=Cp1252)
  * düşer; Cp1252'de ç ö ü vardır ama Türkçe'ye özgü ğ Ğ ş Ş ı İ YOKTUR → bu harfler
- * PDF'te düşer. (Windows'ta da aynı mekanizma; macOS'a özgü değildir.)
+ * PDF'te düşer (sembol/“#”). (Windows'ta da aynı mekanizma; macOS'a özgü değildir.)
  *
- * Neden fallback/varsayılan font'a bağlıyoruz (named triplet değil):
- * UDE'nin XSL→FO dönüştürücüsü (b.e) gerçek belgelerde font-family'yi ya HİÇ vermez
- * (FOP varsayılanı "sans-serif") ya da BOŞLUKLU ad verir ("Times New Roman",
- * "Tahoma"). FOP 0.92 boşluklu font-family adlarını eşleştiremez → her iki durumda
- * da FOP'un varsayılan/fallback font zincirine düşülür. Bu yüzden düzeltme, bu
- * fallback/varsayılan adları (sans-serif, serif, any, Times, Helvetica, monospace…)
- * tam Unicode kapsamlı, GÖMÜLÜ Times New Roman'a bağlamaktır. (UYAP belgelerinin
- * standart yazı tipi zaten Times New Roman'dır.) Boşluksuz "Arial" adı eşleşebildiği
- * için Arial ayrıca korunur.
+ * Çözüm: FopFactory'ye, tam Unicode kapsamlı fontları GÖMEN bir kullanıcı
+ * yapılandırması set edilir. Çıktı PDF'te font Type0/Identity-H + gömülü FontFile2
+ * olur, tüm Türkçe harfler doğru çizilir ve PDF kendi kendine yeter (görüntüleyenin
+ * fontu olması gerekmez).
  *
- * Çıktı PDF'te font Type0/Identity-H + gömülü FontFile2 olur, tüm Türkçe harfler
- * doğru çizilir. Gerçek belgelerle (font-family yok / boşluklu Times / Tahoma)
- * doğrulanmıştır: base-14'e düşüş kalmaz.
+ * HİBRİT font seçimi (her macOS'ta çalışsın diye):
+ *   - Sistemde Times New Roman / Arial varsa (çoğu Mac) onlar gömülür → gerçek Times/Arial.
+ *   - Yoksa (bu fontlar silinmiş/hiç olmamış Mac'ler) uygulamayla BİRLİKTE GELEN
+ *     Liberation Serif/Sans (OFL; Times/Arial ile metrik-uyumlu, tam Türkçe) gömülür.
+ * Böylece "bir kullanıcıda çalışıp diğerinde çalışmama" (sistem fontu eksikliği)
+ * sorunu ortadan kalkar.
  *
- * Yapılandırma çalışma zamanında üretilir: metrik XML'ler uygulama paketinden
- * (Contents/app/fopfonts/, build'de TTFReader ile üretilir) okunur; gömülecek TTF'ler
- * macOS /System/Library/Fonts/Supplemental'dan alınır. Tümü try/catch ile sarılıdır:
- * metrik/font yoksa hiçbir şey yapılmaz, mevcut (base-14) davranış korunur — dışa
- * aktarım asla bu yama yüzünden kırılmaz.
+ * Neden named triplet değil fallback adlar: UDE'nin XSL→FO dönüştürücüsü (b.e)
+ * gerçek belgelerde font-family'yi ya HİÇ vermez (FOP varsayılanı "sans-serif") ya da
+ * BOŞLUKLU ad verir ("Times New Roman", "Tahoma") — FOP 0.92 boşluklu adı eşleştiremez.
+ * Her iki durumda da FOP'un fallback/varsayılan zincirine düşülür; bu yüzden o adlar
+ * (sans-serif, serif, any, Times, Helvetica, monospace…) gömülü serif fonta bağlanır.
+ * UYAP belgelerinin standart yazı tipi zaten Times'tır. Boşluksuz "Arial" ayrıca korunur.
  *
- * build.sh (apply_fop_fonts) bu sınıfı jar'a koyar ve FOP sürücüsünün
- * FopFactory.newInstance() çağrısından sonra apply(...)'i Javassist ile ekler.
+ * Tümü try/catch ile sarılıdır: font/metrik yoksa hiçbir şey yapılmaz, mevcut
+ * (base-14) davranış korunur — dışa aktarım asla bu yama yüzünden kırılmaz.
+ *
+ * Metrik XML'ler ve Liberation TTF'leri uygulama paketinde (Contents/app/fopfonts/)
+ * bulunur; build (scripts/build.sh apply_fop_fonts) üretir/yerleştirir. Bu sınıf jar'a
+ * konur ve FOP sürücüsünün FopFactory.newInstance() sonrası apply(...) Javassist ile eklenir.
  */
 public final class FopFonts {
 
     private static final String SUP = "/System/Library/Fonts/Supplemental/";
 
-    // Fiziksel font varyantları: metrik-xml | Supplemental TTF | style | weight
-    private static final String[][] TIMES = {
-        {"times.xml",            "Times New Roman.ttf",             "normal", "normal"},
-        {"times-bold.xml",       "Times New Roman Bold.ttf",        "normal", "bold"},
-        {"times-italic.xml",     "Times New Roman Italic.ttf",      "italic", "normal"},
-        {"times-bolditalic.xml", "Times New Roman Bold Italic.ttf", "italic", "bold"},
+    // variant: systemTtf | systemMetric | libTtf | libMetric | style | weight
+    private static final String[][] SERIF = {
+        {"Times New Roman.ttf",             "times.xml",            "LiberationSerif-Regular.ttf",    "libserif.xml",            "normal", "normal"},
+        {"Times New Roman Bold.ttf",        "times-bold.xml",       "LiberationSerif-Bold.ttf",       "libserif-bold.xml",       "normal", "bold"},
+        {"Times New Roman Italic.ttf",      "times-italic.xml",     "LiberationSerif-Italic.ttf",     "libserif-italic.xml",     "italic", "normal"},
+        {"Times New Roman Bold Italic.ttf", "times-bolditalic.xml", "LiberationSerif-BoldItalic.ttf", "libserif-bolditalic.xml", "italic", "bold"},
     };
-    private static final String[][] ARIAL = {
-        {"arial.xml",            "Arial.ttf",                       "normal", "normal"},
-        {"arial-bold.xml",       "Arial Bold.ttf",                  "normal", "bold"},
-        {"arial-italic.xml",     "Arial Italic.ttf",               "italic", "normal"},
-        {"arial-bolditalic.xml", "Arial Bold Italic.ttf",           "italic", "bold"},
+    private static final String[][] SANS = {
+        {"Arial.ttf",            "arial.xml",            "LiberationSans-Regular.ttf",    "libsans.xml",            "normal", "normal"},
+        {"Arial Bold.ttf",       "arial-bold.xml",       "LiberationSans-Bold.ttf",       "libsans-bold.xml",       "normal", "bold"},
+        {"Arial Italic.ttf",     "arial-italic.xml",     "LiberationSans-Italic.ttf",     "libsans-italic.xml",     "italic", "normal"},
+        {"Arial Bold Italic.ttf","arial-bolditalic.xml", "LiberationSans-BoldItalic.ttf", "libsans-bolditalic.xml", "italic", "bold"},
     };
-    // UDE FO'sunun düştüğü tüm varsayılan/fallback font-family adları → gömülü Times.
-    // "TimesNewRoman" (boşluksuz) da güvenlik için eklenir.
-    private static final String[] TIMES_FAMILIES = {
-        "sans-serif", "serif", "any", "Times", "Helvetica", "monospace",
-        "Courier", "SansSerif", "Serif", "Default", "TimesNewRoman",
+    // font-family → kategori eşlemesi.
+    // - SANS: yalnızca AÇIKÇA sans olan adlar (Arial, Helvetica…). Bu adlar gerçekten
+    //   sans içeriği temsil eder; sans olarak basılır.
+    // - SERIF: serif adlar + UDE'nin font yazmadığı durumda FOP'un kullandığı "sans-serif"
+    //   varsayılanı + eşleşmeyen adların düştüğü "any". UDE font-family'yi çoğu zaman HİÇ
+    //   yazmaz; bu belgeler aslında UYAP standardı Times'tır, bu yüzden "sans-serif"
+    //   (=fontsuz varsayılan) bilerek serif/Times'a bağlanır. (UDE pratikte "sans-serif"
+    //   anahtar kelimesini üretmediğinden sans içeriğin sadakati bozulmaz; gerçek sans
+    //   metin "Arial" gibi adlarla gelir ve yukarıda sans'a düşer.)
+    private static final String[] SANS_FAMILIES = {
+        "SansSerif", "Helvetica", "Arial",
+    };
+    private static final String[] SERIF_FAMILIES = {
+        "serif", "Serif", "sans-serif", "any", "Default", "Times", "TimesNewRoman",
+        "monospace", "Courier",
     };
 
     private static boolean done;
@@ -86,8 +99,8 @@ public final class FopFonts {
         if (done) return conf;
         done = true;
 
-        File metricsDir = bundleFopFontsDir();
-        if (metricsDir == null || !metricsDir.isDirectory()) return null;
+        File bundle = bundleFopFontsDir();   // Contents/app/fopfonts (metrikler + Liberation TTF)
+        if (bundle == null || !bundle.isDirectory()) return null;
 
         // Temiz çalışma dizini: paket yolu boşluk/Türkçe içerebileceğinden
         // ("Uyap Doküman Editörü.app") metrikleri buraya kopyalayıp URL sorunlarını önle.
@@ -95,11 +108,12 @@ public final class FopFonts {
         work.mkdirs();
 
         StringBuilder fonts = new StringBuilder();
-        // 1) Arial ailesi (boşluksuz "Arial" FO'da eşleşebilir → Arial sadakati)
-        for (String[] v : ARIAL) addFont(fonts, metricsDir, work, v, "Arial");
-        // 2) Tüm fallback/varsayılan adlar → gömülü Times New Roman (ASIL düzeltme)
-        for (String fam : TIMES_FAMILIES)
-            for (String[] v : TIMES) addFont(fonts, metricsDir, work, v, fam);
+        // sans adlar → sans (sistem Arial varsa o, yoksa Liberation Sans)
+        for (String fam : SANS_FAMILIES)
+            for (String[] v : SANS) addFont(fonts, bundle, work, v, fam);
+        // serif adlar → serif (sistem Times varsa o, yoksa Liberation Serif)
+        for (String fam : SERIF_FAMILIES)
+            for (String[] v : SERIF) addFont(fonts, bundle, work, v, fam);
 
         if (fonts.length() == 0) return null;
 
@@ -115,19 +129,35 @@ public final class FopFonts {
         return conf;
     }
 
-    /** Tek bir font-triplet ekler (metrik temiz dizine kopyalanır); eksikse atlar. */
-    private static void addFont(StringBuilder sb, File metricsDir, File work,
+    /**
+     * Bir variant için font-triplet ekler. HİBRİT: sistem fontu (Times/Arial) varsa
+     * onu (sistem metriğiyle), yoksa pakete gömülü Liberation'ı (kendi metriğiyle) kullanır.
+     * Metrik gömülen TTF ile EŞLEŞMELİ (aynı font), aksi halde glif kayar.
+     */
+    private static void addFont(StringBuilder sb, File bundle, File work,
                                 String[] v, String family) throws Exception {
-        File src = new File(metricsDir, v[0]);
-        File ttf = new File(SUP + v[1]);
-        if (!src.isFile() || !ttf.isFile()) return;
-        File metric = new File(work, v[0]);
-        if (!metric.isFile()) copy(src, metric);
-        sb.append("<font metrics-url=\"").append(fileUrl(metric))
+        // v: [0]=sysTtf [1]=sysMetric [2]=libTtf [3]=libMetric [4]=style [5]=weight
+        File sysTtf    = new File(SUP + v[0]);
+        File sysMetric = new File(bundle, v[1]);
+        File libTtf    = new File(bundle, v[2]);
+        File libMetric = new File(bundle, v[3]);
+
+        File ttf, metric;
+        if (sysTtf.isFile() && sysMetric.isFile()) {        // sistem fontu mevcut → gerçek Times/Arial
+            ttf = sysTtf; metric = sysMetric;
+        } else if (libTtf.isFile() && libMetric.isFile()) { // değilse → gömülü Liberation
+            ttf = libTtf; metric = libMetric;
+        } else {
+            return; // ikisi de yoksa bu varyantı atla
+        }
+
+        File m = new File(work, metric.getName());
+        if (!m.isFile()) copy(metric, m);
+        sb.append("<font metrics-url=\"").append(fileUrl(m))
           .append("\" kerning=\"yes\" embed-url=\"").append(fileUrl(ttf))
           .append("\"><font-triplet name=\"").append(family)
-          .append("\" style=\"").append(v[2])
-          .append("\" weight=\"").append(v[3]).append("\"/></font>");
+          .append("\" style=\"").append(v[4])
+          .append("\" weight=\"").append(v[5]).append("\"/></font>");
     }
 
     /** Çalışan editor-app.jar'ın yanındaki Contents/app/fopfonts dizinini bulur. */
@@ -135,8 +165,7 @@ public final class FopFonts {
         try {
             File self = new File(FopFonts.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI());
-            // self = .../Contents/app/editor-app.jar → parent = .../Contents/app
-            File base = self.getParentFile();
+            File base = self.getParentFile();   // .../Contents/app
             if (base == null) return null;
             return new File(base, "fopfonts");
         } catch (Throwable t) {
