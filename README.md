@@ -55,18 +55,6 @@ yoktur.)
 **Yeni Editör sürümü çıktığında yukarıdaki tek satırı yeniden çalıştırmanız yeterli. En
 güncel sürüm otomatik inecek ve yamalanacak.**
 
-<details>
-<summary>Depoyu kendiniz indirmeyi tercih ederseniz</summary>
-
-```bash
-git clone https://github.com/saidsurucu/ude-mac-arm64.git
-cd ude-mac-arm64
-./kur.sh
-```
-
-`kur.sh` derlemeyi, imzalamayı ve **/Applications**'a kurulumu sizin için yapar.
-
-</details>
 
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
