@@ -33,7 +33,7 @@ Programcı olmanıza gerek yok. **Terminal** uygulamasını açın (klavyede
 ardından aşağıdaki **tek satırı** kopyalayıp yapıştırın ve **Enter**'a basın:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh | bash
+arch -arm64 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
 ```
 
 Hepsi bu kadar. Manuel indirme, klasöre girme, Java kurma gibi adımlar **yok**. Bu komut

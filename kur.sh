@@ -7,7 +7,7 @@
 #
 # İki şekilde çalışır:
 #   • İnternetten tek satırla:
-#       curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh | bash
+#       arch -arm64 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
 #     (kaynak kodu kendisi indirir, derler ve kurar)
 #   • Depoyu zaten indirdiyseniz, klasörün içinde:  ./kur.sh
 #
@@ -54,6 +54,12 @@ ensure_clt() {
 step "Ortam denetimi"
 [ "$(uname -s)" = "Darwin" ] || die "Bu betik yalnızca macOS içindir."
 if [ "$(uname -m)" != "arm64" ]; then
+	if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+		die "Terminaliniz Rosetta (x86_64) modunda çalışıyor; Mac'iniz Apple Silicon olsa da betik bunu göremiyor.
+  Çözüm 1 — komutu arm64 zorlayarak çalıştırın:
+    ${BOLD}arch -arm64 bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)\"${RST}
+  Çözüm 2 — Terminal'in ${BOLD}Bilgi Al${RST} (⌘I) penceresinde ${BOLD}\"Rosetta kullanarak aç\"${RST} işaretini kaldırıp terminali yeniden açın."
+	fi
 	die "Bu betik Apple Silicon (M1/M2/M3/M4) içindir. Mevcut mimari: $(uname -m)"
 fi
 ok "Apple Silicon Mac algılandı"
