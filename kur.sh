@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 # kur.sh — UDE'yi Apple Silicon Mac'te tek komutla derleyip kuran yardımcı betik.
 #
-# README'deki adımları (geliştirici araçları + Java'ların indirilmesi + derleme +
-# paketleme + Applications'a taşıma) sizin için sırayla yapar. Programcı olmanıza
-# gerek yok: bu dosyanın bulunduğu klasörde Terminal'de  ./kur.sh  yazıp Enter'a basın.
+# README'deki adımları (geliştirici araçları + kaynak kodun indirilmesi +
+# Java'ların indirilmesi + derleme + paketleme + Applications'a taşıma) sizin için
+# sırayla yapar. Programcı olmanıza gerek yok.
+#
+# İki şekilde çalışır:
+#   • İnternetten tek satırla:
+#       curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh | bash
+#     (kaynak kodu kendisi indirir, derler ve kurar)
+#   • Depoyu zaten indirdiyseniz, klasörün içinde:  ./kur.sh
 #
 # Asıl derleme mantığı scripts/build.sh içindedir; bu betik onu sarmalar.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_URL="https://github.com/saidsurucu/ude-mac-arm64.git"
+CLONE_DIR="$HOME/ude-mac-arm64"
 
 # ----- Renkli, anlaşılır mesajlar -----
 if [ -t 1 ]; then
@@ -24,24 +30,13 @@ warn() { printf '%s\n' "${YLW}!${RST} $*"; }
 die()  { printf '%s\n' "${RED}✗ $*${RST}" >&2; exit 1; }
 step() { printf '\n%s\n' "${BOLD}== $* ==${RST}"; }
 
-APP_NAME="Uyap Doküman Editörü.app"
-BUILT_APP="$SCRIPT_DIR/build/$APP_NAME"
-DEST_APP="/Applications/$APP_NAME"
-
-# ----- 0) Ortam kontrolü -----
-step "Ortam denetimi"
-[ "$(uname -s)" = "Darwin" ] || die "Bu betik yalnızca macOS içindir."
-if [ "$(uname -m)" != "arm64" ]; then
-	die "Bu betik Apple Silicon (M1/M2/M3/M4) içindir. Mevcut mimari: $(uname -m)"
-fi
-ok "Apple Silicon Mac algılandı"
-[ -f "$SCRIPT_DIR/scripts/build.sh" ] || die "scripts/build.sh bulunamadı. Betiği depo klasörünün içinden çalıştırın."
-
-# ----- 1) Xcode komut satırı araçları (make, codesign vb.) -----
-step "Geliştirici araçları (bir kez)"
-if xcode-select -p >/dev/null 2>&1; then
-	ok "Komut satırı araçları zaten kurulu"
-else
+# ----- Xcode komut satırı araçları (git, make, codesign vb.) -----
+# Hem internetten indirme (git) hem derleme (make) için gerekli; bir kez kurulur.
+ensure_clt() {
+	if xcode-select -p >/dev/null 2>&1; then
+		ok "Komut satırı araçları zaten kurulu"
+		return
+	fi
 	warn "Komut satırı araçları yok; kurulum penceresi açılıyor…"
 	xcode-select --install >/dev/null 2>&1 || true
 	say "Açılan pencerede ${BOLD}\"Yükle\"${RST}ye basıp bitmesini bekleyin."
@@ -53,7 +48,51 @@ else
 	done
 	printf '\n'
 	ok "Komut satırı araçları kuruldu"
+}
+
+# ----- 0) Ortam kontrolü -----
+step "Ortam denetimi"
+[ "$(uname -s)" = "Darwin" ] || die "Bu betik yalnızca macOS içindir."
+if [ "$(uname -m)" != "arm64" ]; then
+	die "Bu betik Apple Silicon (M1/M2/M3/M4) içindir. Mevcut mimari: $(uname -m)"
 fi
+ok "Apple Silicon Mac algılandı"
+
+# ----- Önyükleme: depo klasörünün içinde miyiz? -----
+# curl ... | bash ile çalıştırıldığında BASH_SOURCE boş/geçersiz olur; bu durumda
+# kaynak kodu kendimiz indirip oradaki kur.sh'yi yeniden çalıştırırız.
+SRC="${BASH_SOURCE[0]:-}"
+SCRIPT_DIR=""
+if [ -n "$SRC" ] && [ -f "$SRC" ]; then
+	SCRIPT_DIR="$(cd "$(dirname "$SRC")" && pwd)"
+fi
+
+if [ -z "$SCRIPT_DIR" ] || [ ! -f "$SCRIPT_DIR/scripts/build.sh" ]; then
+	step "Kaynak kodun indirilmesi"
+	ensure_clt
+	command -v git >/dev/null 2>&1 || die "git bulunamadı (komut satırı araçları eksik olabilir)."
+	if [ -d "$CLONE_DIR/.git" ]; then
+		say "Depo zaten var, en güncel sürüme güncelleniyor: $CLONE_DIR"
+		git -C "$CLONE_DIR" pull --ff-only --quiet || warn "Güncelleme atlandı; mevcut sürümle devam ediliyor."
+	else
+		[ -e "$CLONE_DIR" ] && die "$CLONE_DIR zaten var ama bir git deposu değil. Lütfen taşıyın/silin."
+		say "Kaynak kod indiriliyor: $CLONE_DIR"
+		git clone --depth 1 "$REPO_URL" "$CLONE_DIR" --quiet
+	fi
+	ok "Kaynak kod hazır"
+	# İndirilen depodaki kur.sh'yi devral (bu noktadan sonrasını o yürütür).
+	exec bash "$CLONE_DIR/kur.sh"
+fi
+
+cd "$SCRIPT_DIR"
+
+APP_NAME="Uyap Doküman Editörü.app"
+BUILT_APP="$SCRIPT_DIR/build/$APP_NAME"
+DEST_APP="/Applications/$APP_NAME"
+
+# ----- 1) Xcode komut satırı araçları (make, codesign vb.) -----
+step "Geliştirici araçları (bir kez)"
+ensure_clt
 command -v make >/dev/null 2>&1 || die "make bulunamadı (komut satırı araçları eksik olabilir)."
 
 # ----- 2) Gömülecek arm64 Java 11 -----

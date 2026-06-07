@@ -26,85 +26,48 @@ ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 
 ---
 
-# 👩‍⚖️ Kolay kurulum — kendiniz derleyin
+# 👩‍⚖️ Kolay kurulum — tek satır
 
-Programcı olmanıza gerek yok; aşağıdaki komutları sırayla **kopyalayıp yapıştırmanız**
-yeterli. Java vb. ayrıca kurmanıza gerek yoktur — gereken Java sürümleri build sırasında
-**otomatik** indirilir.
-
-### 1) Geliştirici araçlarını kurun (bir kez)
-
-**Terminal** uygulamasını açın: klavyede `Command (⌘) + Boşluk`'a basın, açılan kutuya
-**Terminal** yazıp **Enter**'a basın. Sonra şu satırı yapıştırıp **Enter**'a basın:
+Programcı olmanıza gerek yok. **Terminal** uygulamasını açın (klavyede
+`Command (⌘) + Boşluk`'a basıp açılan kutuya **Terminal** yazın ve **Enter**'a basın),
+ardından aşağıdaki **tek satırı** kopyalayıp yapıştırın ve **Enter**'a basın:
 
 ```bash
-xcode-select --install
+curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh | bash
 ```
 
-Bir pencere açılırsa **"Yükle"**ye basıp bitmesini bekleyin. (Zaten kuruluysa "already
-installed" der; sorun değil.)
+Hepsi bu kadar. Manuel indirme, klasöre girme, Java kurma gibi adımlar **yok**. Bu komut
+gerisini sizin için yapar:
 
-### 2) Kaynak kodu indirin
+- Gerekiyorsa **geliştirici araçlarını** (Xcode komut satırı araçları) kurar — bir pencere
+  açılırsa yalnızca **"Yükle"**ye basıp bitmesini bekleyin, betik kendiliğinden devam eder.
+- **Kaynak kodu** `~/ude-mac-arm64` klasörüne indirir (zaten varsa en güncel sürüme günceller).
+- Gereken **Java** sürümlerini otomatik indirir.
+- Uygulamayı modern ikonlarla **derler + imzalar** ve doğrudan **/Applications** klasörüne kurar.
 
-İki yol var; **A yolu** en kolayıdır (tıkla-indir).
-
-**A) ZIP olarak indirin (önerilir)**
-
-1. Bu sayfanın sağ üstündeki yeşil **`< > Code`** düğmesine tıklayın.
-2. Açılan menünün en altındaki **"Download ZIP"**e tıklayın. Dosya **İndirilenler**
-   (Downloads) klasörünüze iner (`ude-mac-arm64-main.zip`).
-3. İnen ZIP dosyasına **çift tıklayın**; yanında `ude-mac-arm64-main` adında bir klasör
-   açılır.
-
-Sonra **Terminal**'i açıp (`⌘ + Boşluk` → `Terminal` → Enter) şu satırı yapıştırın ve
-**Enter**'a basın — bu, az önce açılan klasörün içine girer:
-
-```bash
-cd ~/Downloads/ude-mac-arm64-main
-```
-
-**B) Tek komutla indirin (Terminal'i biliyorsanız)**
-
-```bash
-git clone https://github.com/saidsurucu/ude-mac-arm64.git
-cd ude-mac-arm64
-```
-
-### 3) Tek komutla derleyip kurun
-
-Klasöre girdikten sonra (yukarıdaki `cd …` adımı) şu **tek satırı** yapıştırıp
-**Enter**'a basmanız yeterli:
-
-```bash
-./kur.sh
-```
-
-`kur.sh` gerisini sizin için yapar: geliştirici araçlarını kurar (gerekiyorsa),
-Java sürümlerini **otomatik** indirir, uygulamayı modern ikonlarla derleyip imzalar ve
-bitince doğrudan **/Applications** klasörüne kurar. İlk derleme internet hızınıza göre
-birkaç dakika sürebilir.
-
-> Eğer `permission denied` derse bir kez `chmod +x kur.sh` çalıştırıp `./kur.sh`'yi
-> tekrar deneyin.
+İlk derleme internet hızınıza göre birkaç dakika sürebilir.
 
 Bittiğinde uygulama **Launchpad** ve **Applications** klasöründe hazırdır; çift tıklayarak
 ya da `.udf` dosyalarına çift tıklayarak açabilirsiniz. (Kendiniz derleyip imzaladığınız
 için macOS "geliştirici doğrulanamadı" uyarısı **çıkmaz**; `xattr` ile uğraşmanıza gerek
 yoktur.)
 
-**Yeni Editör sürümü çıktığında 2. adımdan itibaren adımları tekrarlamanız yeterli. En güncel sürüm otomatik inecek ve yamalanacak.**
+**Yeni Editör sürümü çıktığında yukarıdaki tek satırı yeniden çalıştırmanız yeterli. En
+güncel sürüm otomatik inecek ve yamalanacak.**
 
 <details>
-<summary>Tek tek komutlarla yapmayı tercih ederseniz (kur.sh yerine)</summary>
+<summary>Depoyu kendiniz indirmeyi tercih ederseniz</summary>
 
 ```bash
-make jdk           # gömülecek arm64 Java 11'i otomatik indirir
-make jpackage-jdk  # paketleyici JDK'yı otomatik indirir
-ICONS=1 make all   # uygulamayı derler + modern ikonlarla paketler + imzalar
-mv "build/Uyap Doküman Editörü.app" /Applications/
+git clone https://github.com/saidsurucu/ude-mac-arm64.git
+cd ude-mac-arm64
+./kur.sh
 ```
 
+`kur.sh` derlemeyi, imzalamayı ve **/Applications**'a kurulumu sizin için yapar.
+
 </details>
+
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
 
