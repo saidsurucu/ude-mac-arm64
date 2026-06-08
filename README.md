@@ -67,6 +67,11 @@ Akıllı kart / e-imza sürücünüzün de Apple Silicon (arm64) sürümünün k
    **"Mac OS Intel"** paketini değil, **Arm** paketini seçin.
 2. İndirilen `.pkg`'a çift tıklayıp kurulumu tamamlayın (yönetici şifresi ister).
 
+### ⌨️ Klavye kısayolları
+
+Bu derlemede kısayollar Mac'e uyarlanmıştır (kalın `⌘B`, kaydet `⌘S`, hizalama
+`⌘L/E/R/J`, yazı boyutu `⌘⇧.`/`⌘⇧,` …). Tam liste için bkz. **[KISAYOLLAR.md](KISAYOLLAR.md)**.
+
 ---
 
 # 🛠️ Mühendisler için — Teknik ayrıntı
