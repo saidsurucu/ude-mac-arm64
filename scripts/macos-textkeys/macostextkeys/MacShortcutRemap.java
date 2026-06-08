@@ -88,6 +88,12 @@ public final class MacShortcutRemap {
         new Map(KeyEvent.VK_I, META,         null,            KeyEvent.VK_T, CTRL,         Fb.SYNTHETIC), // İtalik      ← Ctrl+T
         new Map(KeyEvent.VK_U, META,         null,            KeyEvent.VK_A, CTRL | SHIFT, Fb.SYNTHETIC), // Altı çizili ← Ctrl+Shift+A
 
+        // — Büyük harf (Mac Word kısayolu ⌘⇧A): menüde yok → sentetik Ctrl+Up (UDE'de
+        //   "BÜYÜK HARF" = Ctrl+Up). Mac Word'de ayrı "küçük harf" kısayolu yoktur;
+        //   küçüğe Shift+F3 döngüsüyle ulaşılır — UDE'nin "Harf Modu Değiştir"i de zaten
+        //   Shift+F3'tür ve Cmd içermediğinden Mac'te doğrudan çalışır (remap gerekmez). —
+        new Map(KeyEvent.VK_A, META | SHIFT, null,            KeyEvent.VK_UP, CTRL,        Fb.SYNTHETIC), // BÜYÜK HARF  ← Ctrl+Up
+
         // — Pano / seçim: menü eylemi (zengin-metin), yedek doğrudan metin API'si —
         new Map(KeyEvent.VK_A, META,         "Tümünü Seç",    0, 0, Fb.SELECT_ALL),
         new Map(KeyEvent.VK_C, META,         "Kopyala",       0, 0, Fb.COPY),
@@ -120,6 +126,49 @@ public final class MacShortcutRemap {
         new Map(KeyEvent.VK_T, META,         "Yazı Özellikleri", 0, 0, Fb.NONE),
     };
 
+    /**
+     * Klavye kısayolu OLMAYAN (yalnız Ribbon araç çubuğunda butonu bulunan) komutlar.
+     * UDE'de bu işlevlerin klavye kısayolu ve menü öğesi yok; yalnız Flamingo
+     * JCommandButton/JCommandToggleButton var. Bu yüzden butonu görünen metninden bulup
+     * doActionClick() ederiz. Butonlar genelde "Giriş" sekmesindedir ama Flamingo tüm
+     * sekme bantlarını bellekte tuttuğundan sekme etkin olmasa da bileşen ağacında bulunur.
+     *
+     * Tuş seçimleri (Mac Word + Türkçe Apple klavye uyumu):
+     *   - Hizalama ⌘L/E/R/J: Mac Word standardı.
+     *   - Font büyüt/küçült ⌘⇧./⌘⇧,: Word'de ⌘⇧>/< nokta/virgül tuşundadır; Türkçe
+     *     klavyede [ ] = Option+8/9 olduğundan parantez seti kullanışsız → nokta/virgül.
+     *   - Köprü ⌘K: Mac Word standardı (Insert Hyperlink).
+     */
+    private static final class CmdMap {
+        final int srcKey;       // keyCode ile eşleşme (char tabanlıysa -1)
+        final char srcChar;     // keyChar ile eşleşme (keyCode tabanlıysa 0)
+        final int srcMods;
+        final String buttonText;
+        CmdMap(int srcKey, int srcMods, String buttonText) {
+            this.srcKey = srcKey; this.srcChar = 0; this.srcMods = srcMods; this.buttonText = buttonText;
+        }
+        CmdMap(char srcChar, int srcMods, String buttonText) {
+            this.srcKey = -1; this.srcChar = srcChar; this.srcMods = srcMods; this.buttonText = buttonText;
+        }
+    }
+
+    /*
+     * Not — font boyutu keyChar ile eşlenir, keyCode ile DEĞİL: Türkçe Apple klavyede
+     * nokta/virgül tuşları Java'ya VK_SLASH(47)/VK_BACK_SLASH(92) olarak gelir (US'te
+     * VK_PERIOD/VK_COMMA). keyChar ise her düzende doğru: Türkçe '.'/',' , US '>'/'<'.
+     */
+    private static final CmdMap[] CMD_MAPS = {
+        new CmdMap(KeyEvent.VK_L, META,         "Sola Yasla"),     // ⌘L  sola hizala
+        new CmdMap(KeyEvent.VK_E, META,         "Ortala"),         // ⌘E  ortala
+        new CmdMap(KeyEvent.VK_R, META,         "Sağa Yasla"),     // ⌘R  sağa hizala
+        new CmdMap(KeyEvent.VK_J, META,         "İki Yana Yasla"), // ⌘J  iki yana yasla
+        new CmdMap(KeyEvent.VK_K, META,         "Köprü Ekle"),     // ⌘K  köprü ekle
+        new CmdMap('.',           META | SHIFT, "Font Büyüt"),     // ⌘⇧.  (TR) font büyüt
+        new CmdMap('>',           META | SHIFT, "Font Büyüt"),     // ⌘⇧>  (US)
+        new CmdMap(',',           META | SHIFT, "Font Küçült"),    // ⌘⇧,  (TR) font küçült
+        new CmdMap('<',           META | SHIFT, "Font Küçült"),    // ⌘⇧<  (US)
+    };
+
     private MacShortcutRemap() {}
 
     static void install() {
@@ -144,9 +193,16 @@ public final class MacShortcutRemap {
             if (id != KeyEvent.KEY_PRESSED && id != KeyEvent.KEY_RELEASED) return false;
 
             Map m = lookup(e.getKeyCode(), mods);
-            if (m == null) return false;
-            if (id == KeyEvent.KEY_PRESSED) perform(m, e);
-            return true;                                    // özgün Cmd basma/bırakmayı yut
+            if (m != null) {
+                if (id == KeyEvent.KEY_PRESSED) perform(m, e);
+                return true;                                // özgün Cmd basma/bırakmayı yut
+            }
+            CmdMap cm = cmdLookup(e, mods);
+            if (cm != null) {
+                if (id == KeyEvent.KEY_PRESSED) clickCommandButton(cm.buttonText, focusOwner(e));
+                return true;
+            }
+            return false;
         } catch (Throwable t) {
             return false;
         }
@@ -155,6 +211,79 @@ public final class MacShortcutRemap {
     static Map lookup(int keyCode, int mods) {
         for (Map m : MAPS) if (m.srcKey == keyCode && m.srcMods == mods) return m;
         return null;
+    }
+
+    static CmdMap cmdLookup(KeyEvent e, int mods) {
+        for (CmdMap m : CMD_MAPS) {
+            if (m.srcMods != mods) continue;
+            if (m.srcChar != 0) { if (m.srcChar == e.getKeyChar()) return m; }
+            else if (m.srcKey == e.getKeyCode()) return m;
+        }
+        return null;
+    }
+
+    // ——— Flamingo ribbon butonu (AbstractCommandButton) reflection köprüsü ———
+    //     Agent jar Flamingo'suz derlendiğinden tüm erişim reflection'ladır.
+
+    private static final String ACB = "org.pushingpixels.flamingo.api.common.AbstractCommandButton";
+
+    /** Görünen metni {@code text} olan ETKİN command-button'ı bulup eylemini tetikler. */
+    private static void clickCommandButton(String text, Component focus) {
+        Object b = findCommandButton(text, focus);
+        if (b == null) return;
+        try {
+            b.getClass().getMethod("doActionClick").invoke(b);
+        } catch (Throwable ignore) {
+            // doActionClick yoksa/başarısızsa sessizce geç (uygulamayı düşürme).
+        }
+    }
+
+    private static Object findCommandButton(String text, Component focus) {
+        // Önce odaktaki pencere, sonra tüm çerçeveler (görünür olmayanlar dâhil).
+        Window w = (focus != null) ? SwingUtilities.getWindowAncestor(focus) : null;
+        if (w != null) {
+            Object r = scanCmd(w, text);
+            if (r != null) return r;
+        }
+        for (Frame f : Frame.getFrames()) {
+            Object r = scanCmd(f, text);
+            if (r != null) return r;
+        }
+        return null;
+    }
+
+    private static Object scanCmd(Component c, String text) {
+        if (isCommandButton(c) && c.isEnabled() && text.equals(cmdText(c))) return c;
+        if (c instanceof Container) {
+            for (Component child : ((Container) c).getComponents()) {
+                Object r = scanCmd(child, text);
+                if (r != null) return r;
+            }
+        }
+        if (c instanceof Window) {
+            for (Window ow : ((Window) c).getOwnedWindows()) {
+                Object r = scanCmd(ow, text);
+                if (r != null) return r;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isCommandButton(Object o) {
+        if (o == null) return false;
+        for (Class<?> k = o.getClass(); k != null; k = k.getSuperclass()) {
+            if (ACB.equals(k.getName())) return true;
+        }
+        return false;
+    }
+
+    private static String cmdText(Object o) {
+        try {
+            Object r = o.getClass().getMethod("getText").invoke(o);
+            return r == null ? null : r.toString().trim();
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static void perform(Map m, KeyEvent e) {

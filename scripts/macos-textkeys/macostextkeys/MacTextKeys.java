@@ -66,6 +66,9 @@ public final class MacTextKeys {
         // UYAP'ın alışılmadık Ctrl kısayollarını standart Cmd kısayollarına bağla
         // (Cmd+B→kalın, Cmd+I→italik, Cmd+U→altı çizili, Cmd+F→bul, Cmd+S→kaydet …).
         MacShortcutRemap.install();
+        // Ribbon tooltip'lerindeki Windows kısayollarını Mac karşılıklarıyla değiştir
+        // (Kaydet "(Shift+Ctrl+K)" → "(⌘S)", Kalın "(Ctrl+K)" → "(⌘B)", hizalama → "(⌘L)" …).
+        MacTooltips.install();
         try {
             Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
                 @Override public void eventDispatched(AWTEvent e) {
