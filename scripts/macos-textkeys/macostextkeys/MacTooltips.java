@@ -70,6 +70,13 @@ public final class MacTooltips {
         // Font boyutu — Win Shift+Ctrl+↑/↓ → Mac ⌘⇧. / ⌘⇧,
         WIN2MAC.put("(Shift+Ctrl+UP)",   CMD + SH + ".");  // Font Büyüt
         WIN2MAC.put("(Shift+Ctrl+DOWN)", CMD + SH + ",");  // Font Küçült
+        // UDE'ye özel komutlar (Ctrl→⌘)
+        WIN2MAC.put("(Ctrl+G)",       CMD + "G");          // Paragraf Özellikleri
+        WIN2MAC.put("(Shift+Ctrl+R)", CMD + SH + "R");     // Stil Özellikleri
+        WIN2MAC.put("(Shift+Ctrl+J)", CMD + SH + "J");     // Türünü Değiştir
+        WIN2MAC.put("(Shift+Ctrl+G)", CMD + SH + "G");     // İmzalar
+        WIN2MAC.put("(Shift+Ctrl+D)", CMD + SH + "D");     // Sayfa Düzenle
+        WIN2MAC.put("(Shift+Ctrl+B)", CMD + SH + "B");     // Biçim Kopyala
 
         // Kısayol göstermeyen butonlar — metinden eşle
         TEXT2MAC.put("Sola Yasla",     CMD + "L");
