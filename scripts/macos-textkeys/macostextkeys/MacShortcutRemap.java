@@ -167,6 +167,14 @@ public final class MacShortcutRemap {
         new CmdMap('>',           META | SHIFT, "Font Büyüt"),     // ⌘⇧>  (US)
         new CmdMap(',',           META | SHIFT, "Font Küçült"),    // ⌘⇧,  (TR) font küçült
         new CmdMap('<',           META | SHIFT, "Font Küçült"),    // ⌘⇧<  (US)
+
+        // — UDE'ye özel komutlar: Ctrl→⌘ (ribbon butonu olanlar; doClick) —
+        new CmdMap(KeyEvent.VK_G, META,         "Paragraf Özellikleri"), // ⌘G   (Win Ctrl+G)
+        new CmdMap(KeyEvent.VK_R, META | SHIFT, "Stil Özellikleri"),     // ⌘⇧R  (Win Shift+Ctrl+R)
+        new CmdMap(KeyEvent.VK_J, META | SHIFT, "Türünü Değiştir"),      // ⌘⇧J  (Win Shift+Ctrl+J)
+        new CmdMap(KeyEvent.VK_G, META | SHIFT, "İmzalar"),             // ⌘⇧G  (Win Shift+Ctrl+G)
+        new CmdMap(KeyEvent.VK_D, META | SHIFT, "Sayfa Düzenle"),       // ⌘⇧D  (Win Shift+Ctrl+D)
+        new CmdMap(KeyEvent.VK_B, META | SHIFT, "Biçim Kopyala"),       // ⌘⇧B  (Win Shift+Ctrl+B)
     };
 
     private MacShortcutRemap() {}
