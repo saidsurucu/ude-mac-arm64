@@ -197,3 +197,9 @@ içindir; bu depo **hazır paket dağıtmaz** (bkz. en üstteki not).
 Bu çalışmaya ilham veren ve sorunun çözüm yolunu ortaya koyan
 [**tosbaha**](https://github.com/tosbaha) kullanıcısına ([tosbaha/uyap-arm](https://github.com/tosbaha/uyap-arm))
 teşekkürler.
+
+## Lisans
+
+Bu depodaki paketleme betikleri, yamalar ve belgeler [MIT Lisansı](LICENSE) ile sunulur.
+Uyap Doküman Editörü'nün kendisi UYAP / T.C. Adalet Bakanlığı'na ait olup bu lisansın
+kapsamı dışındadır; ilgili kullanım koşullarına tabidir.
