@@ -9,9 +9,10 @@
 .DS_Store
 ._*
 
-# README hariç tüm markdown dosyaları
+# README ve KISAYOLLAR hariç tüm markdown dosyaları
 *.md
 !README.md
+!KISAYOLLAR.md
 
 # proje dışı (harness cache)
 /cache/
