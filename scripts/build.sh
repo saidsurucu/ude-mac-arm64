@@ -39,11 +39,13 @@ ZOOM_SRC="$SCRIPT_DIR/macos-zoom"
 FOP_SRC="$SCRIPT_DIR/macos-fop"
 FD_SRC="$SCRIPT_DIR/macos-filedialog"   # native macOS dosya pencereleri yaması
 IMG_SRC="$SCRIPT_DIR/macos-imagefull"   # satır-içi imaj tam-çözünürlük (bulanıklık) yaması
+SKIN_SRC="$SCRIPT_DIR/skin"             # modern düz skin + Flamingo şerit paint yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
 FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencereleri) | 0=kapalı
 IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük (bulanıklık) yaması
+SKIN="${SKIN:-}"        # boş=kapalı | 1=modern düz Substance skin + Flamingo şerit + font
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -410,6 +412,17 @@ apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[imagefull] tam-çözünürlük yaması uygulandı."
 }
 
+apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ -z "$SKIN" ] && return 0
+	c_info "[skin] modern düz skin + Flamingo şerit yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[skin] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[skin] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
+	c_ok "[skin] (iskelet) — henüz yama yok."
+}
+
 patch_jar() {
 	local JAR="$SRC_APP_DIR/app/Contents/Java/editor-app.jar"
 	[ -s "$JAR" ] || die "Önce 'download' çalıştır."
@@ -427,6 +440,7 @@ patch_jar() {
 	apply_fop_fonts "$JAR"
 	apply_filedialog "$JAR"
 	apply_imagefull "$JAR"
+	apply_skin "$JAR"
 	unzip -l "$JAR" | grep "Mac/$SQLITE_ARCH/libsqlitejdbc.dylib" >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
 	c_ok "jar yamalandı (sqlite 3.46 + eawt çıkarıldı)"
@@ -571,6 +585,7 @@ Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözül
        ICONS (boş|1; modern ikon override + HiDPI yükleyici yaması)
        FOPFONTS (1=açık varsayılan | 0=kapalı; PDF dışa aktarımda Türkçe harf
                  düzeltmesi — FOP'a gömülü macOS Arial/Times fontları tanıtılır)
+       SKIN (boş|1; modern düz Substance skin + Flamingo şerit + font)
 EOF
 }
 
@@ -579,6 +594,7 @@ case "${1:-all}" in
 	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; patch) patch_jar ;;
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	skin) SKIN=1 apply_skin "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	package) package ;; sign) sign ;; dmg) dmg ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
 	*) die "Bilinmeyen hedef: $1  (scripts/build.sh help)" ;;
