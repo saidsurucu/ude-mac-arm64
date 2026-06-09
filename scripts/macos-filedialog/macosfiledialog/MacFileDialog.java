@@ -81,7 +81,11 @@ public final class MacFileDialog {
             String d;
             File[] multi;
             try {
-                // Filtre koruma: glob asıl yol, FilenameFilter yedek.
+                // Filtre koruma (en iyi çaba): FileNameExtensionFilter için setFile("*.ext")
+            // glob ipucu + setFilenameFilter yedeği. UYARI: modern macOS NSOpenPanel/
+            // NSSavePanel her ikisini de JDK/OS sürümüne göre yok sayabilir (UTI tabanlı
+            // allowedContentTypes java.awt.FileDialog'dan ayarlanamaz) → süzme bazı
+            // sürümlerde etkisiz olabilir; native pencere tüm dosyaları gösterir.
                 final FileFilter ff = fc.getFileFilter();
                 boolean acceptAll = (ff == null) || ff.equals(fc.getAcceptAllFileFilter());
                 if (!acceptAll) {
@@ -115,6 +119,7 @@ public final class MacFileDialog {
             } else {
                 fc.setSelectedFile(new File(d, name));
             }
+            if (d != null) fc.setCurrentDirectory(new File(d));
             log("seçildi: " + d + name);
             return JFileChooser.APPROVE_OPTION;
         } catch (Throwable t) {
