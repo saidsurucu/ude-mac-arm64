@@ -1,6 +1,8 @@
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
+import javassist.expr.ExprEditor;
+import javassist.expr.FieldAccess;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -44,6 +46,46 @@ public class SkinPatch {
           + "  } }");
         writeClass(slaf, outDir);
         System.out.println("[SkinPatch] setSkin(String) -> FlatUdeSkin sarması uygulandı.");
+
+        // Editor masaüstü arka planı: wp.p.E = teal(44,153,174) static sabiti.
+        // clinit sonrasi nötr gri ile override (alan public static, final değil).
+        try {
+            CtClass wpP = pool.get("tr.com.havelsan.uyap.system.swing.wp.p");
+            wpP.makeClassInitializer().insertAfter(
+                "E = new java.awt.Color(228, 231, 235);");
+            writeClass(wpP, outDir);
+            System.out.println("[SkinPatch] wp.p.E teal -> nötr gri yaması uygulandı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: teal yaması atlandı: " + t);
+        }
+
+        // Tercihlerden (tercihler.xml) yüklenen eski teal degerini de nötrle:
+        // an sinifi pref'i okuyup E alanina putstatic yapar ve clinit varsayilanini ezer.
+        // Yalniz eski teal (-13854290) remap edilir; kullanicinin sectigi baska renkler dokunulmaz.
+        try {
+            CtClass an = pool.get("tr.com.havelsan.uyap.system.editor.common.an");
+            an.instrument(new ExprEditor() {
+                public void edit(FieldAccess f) throws javassist.CannotCompileException {
+                    try {
+                        if (f.isWriter() && "E".equals(f.getFieldName())
+                                && "tr.com.havelsan.uyap.system.swing.wp.p".equals(
+                                    f.getField().getDeclaringClass().getName())) {
+                            f.replace(
+                                "{ java.awt.Color __v = $1;"
+                              + "  if (__v != null && __v.getRGB() == -13854290) {"
+                              + "    __v = new java.awt.Color(228, 231, 235);"
+                              + "  }"
+                              + "  $proceed(__v); }");
+                        }
+                    } catch (javassist.NotFoundException __nf) {
+                    }
+                }
+            });
+            writeClass(an, outDir);
+            System.out.println("[SkinPatch] an pref-load teal koruması uygulandı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: pref-load teal koruması atlandı: " + t);
+        }
     }
 
     private static void writeClass(CtClass cc, File outDir) throws Exception {
