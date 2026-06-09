@@ -66,6 +66,9 @@ public final class MacTextKeys {
         // UYAP'ın alışılmadık Ctrl kısayollarını standart Cmd kısayollarına bağla
         // (Cmd+B→kalın, Cmd+I→italik, Cmd+U→altı çizili, Cmd+F→bul, Cmd+S→kaydet …).
         MacShortcutRemap.install();
+        // macOS Option ile üretilen özel karakterleri (@, #, [, ], { } \ | …) metne
+        // yazılabilir kıl (Türkçe-Q klavye; mnemonic baypası + KEY_TYPED ekleme).
+        MacOptionChars.install();
         // Ribbon tooltip'lerindeki Windows kısayollarını Mac karşılıklarıyla değiştir
         // (Kaydet "(Shift+Ctrl+K)" → "(⌘S)", Kalın "(Ctrl+K)" → "(⌘B)", hizalama → "(⌘L)" …).
         MacTooltips.install();
