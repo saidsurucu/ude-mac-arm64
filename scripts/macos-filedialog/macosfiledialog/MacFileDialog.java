@@ -63,6 +63,41 @@ public final class MacFileDialog {
         return null;
     }
 
+    /**
+     * Pencere başlığından açık belgenin dosya adını çıkarır; yoksa null.
+     * Başlık biçimi: "Doküman Editörü vX (*) - isimsiz.UDF (/Users/.../isimsiz.UDF)".
+     * Önce son parantez içindeki tam yolun taban adı denenir (en güvenilir);
+     * yedek olarak " - " sonrası, " (" öncesi metin alınır.
+     */
+    private static String docNameFromTitle(Window owner) {
+        try {
+            String t = (owner instanceof Frame) ? ((Frame) owner).getTitle() : null;
+            if (t == null) return null;
+            t = t.trim();
+            if (t.isEmpty()) return null;
+            int close = t.lastIndexOf(')');
+            int open = (close > 0) ? t.lastIndexOf('(', close) : -1;
+            if (open >= 0 && close > open) {
+                String inside = t.substring(open + 1, close).trim();
+                if (inside.indexOf('/') >= 0 || inside.indexOf('\\') >= 0) {
+                    int slash = Math.max(inside.lastIndexOf('/'), inside.lastIndexOf('\\'));
+                    String base = inside.substring(slash + 1).trim();
+                    if (!base.isEmpty()) return base;
+                }
+            }
+            int dash = t.indexOf(" - ");
+            if (dash >= 0) {
+                String after = t.substring(dash + 3).trim();
+                int paren = after.indexOf(" (");
+                if (paren > 0) after = after.substring(0, paren).trim();
+                if (!after.isEmpty()) return after;
+            }
+            return null;
+        } catch (Throwable x) {
+            return null;
+        }
+    }
+
     private static int show(JFileChooser fc, Component parent, int mode) {
         try {
             Window owner = (parent instanceof Window) ? (Window) parent
@@ -80,7 +115,15 @@ public final class MacFileDialog {
             if (dir != null) fd.setDirectory(dir.getAbsolutePath());
 
             File sel = fc.getSelectedFile();
-            if (sel != null) fd.setFile(sel.getName());
+            if (sel != null && sel.getName() != null && !sel.getName().isEmpty()) {
+                fd.setFile(sel.getName());
+            } else if (mode == FileDialog.SAVE) {
+                // "Farklı Kaydet"/"PDF olarak kaydet": UDE varsayılan isim vermez (sel=null).
+                // Açık belgenin adını pencere başlığından al (ör. "isimsiz.UDF").
+                // Başlık biçimi: "Doküman Editörü vX (*) - <ad> (<tam yol>)".
+                String docName = docNameFromTitle(owner);
+                if (docName != null && !docName.isEmpty()) fd.setFile(docName);
+            }
 
             if (fc.isMultiSelectionEnabled()) fd.setMultipleMode(true);
 
