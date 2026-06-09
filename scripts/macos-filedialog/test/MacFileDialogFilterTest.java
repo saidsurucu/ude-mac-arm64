@@ -77,6 +77,9 @@ public class MacFileDialogFilterTest {
         FileNameExtensionFilter docx = new FileNameExtensionFilter("Word [.docx]", "docx");
         check("probeExtension bilinmeyen uzanti null",
               MacFileDialog.probeExtension(docx) == null);
+        FileNameExtensionFilter multi = new FileNameExtensionFilter("UDF+RTF", "udf", "rtf");
+        check("probeExtension cok-uzantili ilk esleseni doner",
+              "udf".equals(MacFileDialog.probeExtension(multi)));
 
         if (failures > 0) { System.out.println(failures + " test BASARISIZ"); System.exit(1); }
         System.out.println("Tum testler GECTI");

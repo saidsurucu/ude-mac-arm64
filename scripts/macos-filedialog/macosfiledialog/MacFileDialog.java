@@ -54,7 +54,8 @@ public final class MacFileDialog {
      * Filtrenin uzantısını probe ile bulur: bilinen her uzantı için
      * ff.accept(new File("p."+ext)) dener, kabul edilen ilk uzantıyı döndürür.
      * Obfuscated/özel FileFilter alt sınıflarında da çalışır (yalnız accept()'e dayanır).
-     * accept-all filtreleri çağıran taraf zaten dışlar.
+     * Dikkat: accept-all filtreler çağıran tarafça dışlanmalı; geçirilirse "udf" döner.
+     * Birden çok uzantı kabul eden filtrede KNOWN_EXTS sırasındaki ilk eşleşme döner.
      */
     static String probeExtension(FileFilter ff) {
         if (ff == null) return null;
