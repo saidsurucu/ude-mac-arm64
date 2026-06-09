@@ -1,6 +1,10 @@
 #!/bin/bash
 #
-# build.sh — UDE (Uyap Doküman Editörü) için native Apple Silicon (arm64) .app üretir.
+# build.sh — UDE (Uyap Doküman Editörü) için native macOS .app üretir.
+# Mimari otomatik algılanır: Apple Silicon (arm64) ve Intel (x86_64). Aşağıdaki
+# açıklamalar arm64'ün özgün gerekçesini anlatır; Intel'de mimari-bağımsız tüm
+# düzeltmeler (Java 11/keskin metin, ikonlar, kısayollar, native pencereler, e-imza,
+# PDF Türkçe) aynen geçerlidir.
 #
 # Yaklaşım: jpackage ile arm64 **Java 11** runtime'ı GÖMÜLEREK paketlenir.
 #   - Java 11 = otomatik HiDPI (JEP 263) → Retina'da KESKİN metin.
@@ -62,10 +66,21 @@ SQLITE_VER="${SQLITE_VER:-3.46.1.3}"
 SQLITE_JAR="$VENDOR/sqlite-jdbc-$SQLITE_VER.jar"
 SQLITE_URL="https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/$SQLITE_VER/sqlite-jdbc-$SQLITE_VER.jar"
 
-# Gömülecek arm64 Java 11 (runtime). 'jdk' hedefi Azul Zulu 11'i kurar.
-JDK11_DEST="$HOME/Library/Java/JavaVirtualMachines/zulu-11-arm64.jdk"
+# Hedef mimari otomatik algılanır (Apple Silicon=arm64, Intel=x86_64). Build çalıştığı
+# Mac'in mimarisi için üretir. JH_ARCH=java_home -a, AZUL_ARCH=Azul metadata arch,
+# SQLITE_ARCH=jar içindeki Mac/<arch>/libsqlitejdbc.dylib alt yolu. (die() henüz
+# tanımlı değil; bu yüzden hatayı inline basıyoruz.)
+HOST_ARCH="$(uname -m)"
+case "$HOST_ARCH" in
+	arm64)  AZUL_ARCH=aarch64; JH_ARCH=arm64;  SQLITE_ARCH=aarch64 ;;
+	x86_64) AZUL_ARCH=x64;     JH_ARCH=x86_64; SQLITE_ARCH=x86_64 ;;
+	*) printf '\033[31m✗ Desteklenmeyen mimari: %s\033[0m\n' "$HOST_ARCH" >&2; exit 1 ;;
+esac
+
+# Gömülecek Java 11 (runtime). 'jdk' hedefi Azul Zulu 11'i kurar.
+JDK11_DEST="$HOME/Library/Java/JavaVirtualMachines/zulu-11-$JH_ARCH.jdk"
 # jpackage + shim derlemesi için 17+ JDK. 'jpackage-jdk' Zulu 21 kurar.
-JDK21_DEST="$HOME/Library/Java/JavaVirtualMachines/zulu-21-arm64.jdk"
+JDK21_DEST="$HOME/Library/Java/JavaVirtualMachines/zulu-21-$JH_ARCH.jdk"
 
 c_ok()   { printf '\033[32m✓\033[0m %s\n' "$*"; }
 c_info() { printf '\033[36m▸\033[0m %s\n' "$*"; }
@@ -76,7 +91,7 @@ die()    { c_err "$*"; exit 1; }
 # Gerçekten istenen major sürüm mü (java_home yanlış sürüm döndürebiliyor)
 jhome() {  # $1=major  $2=hedef .jdk
 	if [ -x "$2/Contents/Home/bin/java" ]; then echo "$2/Contents/Home"; return 0; fi
-	local h; h="$(/usr/libexec/java_home -v "$1" -a arm64 2>/dev/null || true)"
+	local h; h="$(/usr/libexec/java_home -v "$1" -a "$JH_ARCH" 2>/dev/null || true)"
 	if [ -n "$h" ] && "$h/bin/java" -version 2>&1 | grep -q "version \"$1"; then echo "$h"; fi
 	return 0
 }
@@ -85,7 +100,7 @@ jdk11_home() { jhome 11 "$JDK11_DEST"; }
 find_jpackage() {
 	local v jh
 	for v in 25 24 23 22 21 20 19 18 17; do
-		jh="$(/usr/libexec/java_home -v "$v" -a arm64 2>/dev/null || true)"
+		jh="$(/usr/libexec/java_home -v "$v" -a "$JH_ARCH" 2>/dev/null || true)"
 		[ -n "$jh" ] && [ -x "$jh/bin/jpackage" ] && { echo "$jh/bin/jpackage"; return 0; }
 	done
 	local home
@@ -110,9 +125,9 @@ icon_deps() {  # Javassist (build-time ikon yükleyici yaması için)
 }
 
 install_zulu() {  # $1=java_version  $2=hedef .jdk
-	c_info "Azul Zulu $1 (aarch64) indiriliyor…"
+	c_info "Azul Zulu $1 ($AZUL_ARCH) indiriliyor…"
 	local url
-	url="$(curl -s "https://api.azul.com/metadata/v1/zulu/packages/?java_version=$1&os=macos&arch=aarch64&archive_type=tar.gz&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&page=1&page_size=1" \
+	url="$(curl -s "https://api.azul.com/metadata/v1/zulu/packages/?java_version=$1&os=macos&arch=$AZUL_ARCH&archive_type=tar.gz&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&page=1&page_size=1" \
 		| /usr/bin/python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["download_url"])')"
 	[ -n "$url" ] || die "Zulu $1 URL'si alınamadı."
 	mkdir -p "$DOWNLOADS"; local tmp="$DOWNLOADS/zulu$1.tgz"
@@ -134,13 +149,13 @@ check_deps() {
 	done
 	c_ok "Araçlar mevcut"
 	local ok=0
-	[ -n "$(jdk11_home)" ] && c_ok "arm64 Java 11 (runtime): $(jdk11_home)" || { c_warn "arm64 Java 11 YOK → scripts/build.sh jdk"; ok=1; }
+	[ -n "$(jdk11_home)" ] && c_ok "$JH_ARCH Java 11 (runtime): $(jdk11_home)" || { c_warn "$JH_ARCH Java 11 YOK → scripts/build.sh jdk"; ok=1; }
 	if jp="$(find_jpackage)"; then c_ok "jpackage: $jp"; else c_warn "jpackage'lı 17+ JDK YOK → scripts/build.sh jpackage-jdk"; ok=1; fi
 	return $ok
 }
 
 jdk() {
-	[ -n "$(jdk11_home)" ] && { c_ok "arm64 Java 11 zaten kurulu."; return 0; }
+	[ -n "$(jdk11_home)" ] && { c_ok "$JH_ARCH Java 11 zaten kurulu."; return 0; }
 	install_zulu 11 "$JDK11_DEST"
 	[ -n "$(jdk11_home)" ] && c_ok "Kuruldu: $JDK11_DEST" || die "Java 11 kurulum sonrası görünmüyor."
 }
@@ -203,7 +218,7 @@ deps() {
 	c_info "sqlite-jdbc $SQLITE_VER hazırlanıyor…"
 	mkdir -p "$VENDOR"
 	[ -s "$SQLITE_JAR" ] || curl -fsSL -o "$SQLITE_JAR" "$SQLITE_URL"
-	unzip -l "$SQLITE_JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "arm64 dylib yok."
+	unzip -l "$SQLITE_JAR" | grep "Mac/$SQLITE_ARCH/libsqlitejdbc.dylib" >/dev/null || die "$SQLITE_ARCH dylib yok."
 	c_ok "sqlite-jdbc hazır"
 }
 
@@ -398,7 +413,7 @@ patch_jar() {
 	apply_fop_fonts "$JAR"
 	apply_filedialog "$JAR"
 	apply_imagefull "$JAR"
-	unzip -l "$JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "sqlite swap başarısız!"
+	unzip -l "$JAR" | grep "Mac/$SQLITE_ARCH/libsqlitejdbc.dylib" >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
 	c_ok "jar yamalandı (sqlite 3.46 + eawt çıkarıldı)"
 }
@@ -486,7 +501,7 @@ dmg() {
 	command -v create-dmg >/dev/null || die "create-dmg yok → brew install create-dmg"
 	local bg="$ROOT/assets/dmg-background.tiff"
 	[ -f "$bg" ] || die "DMG arka planı yok: $bg (assets/dmg-background.svg'den üret)"
-	local out="${DMG_OUT:-$BUILD/$ASCII_NAME-arm64.dmg}"
+	local out="${DMG_OUT:-$BUILD/$ASCII_NAME-$JH_ARCH.dmg}"
 	rm -f "$out"
 	c_info "DMG üretiliyor (sürükle-bırak yerleşimi)…"
 	create-dmg \
@@ -511,7 +526,7 @@ all() {
 	echo
 	c_ok "BİTTİ → $APP"
 	c_info "Çalıştır: open \"$APP\"   |   Kur: /Applications'a sürükle (çift-tık ile .udf açılır, Retina'da keskin)"
-	c_warn "E-imza ancak gerçek kart + arm64 PKCS#11 middleware ile test edilebilir."
+	c_warn "E-imza ancak gerçek kart + $JH_ARCH PKCS#11 middleware ile test edilebilir."
 }
 
 clean()     { c_info "build/ temizleniyor…"; rm -rf "$BUILD"; c_ok "temiz"; }
@@ -519,15 +534,15 @@ distclean() { c_info "build/ + downloads/ + vendor jar temizleniyor…"; rm -rf 
 
 help() {
 	cat <<EOF
-build.sh — UDE native arm64 .app üretici (Java 11 gömülü + eawt-shim)
+build.sh — UDE native $JH_ARCH .app üretici (Java 11 gömülü + eawt-shim)
 
 Hedefler:
   all          Tüm hattı çalıştır (varsayılan)
-  check-deps   Araç + arm64 Java 11 + jpackage denetimi
-  jdk          Gömülecek arm64 Java 11 yoksa Azul Zulu 11 kur
+  check-deps   Araç + $JH_ARCH Java 11 + jpackage denetimi
+  jdk          Gömülecek $JH_ARCH Java 11 yoksa Azul Zulu 11 kur
   jpackage-jdk jpackage'lı 17+ JDK yoksa Azul Zulu 21 kur
   download     Paketi indir + kaynağı aç
-  deps         sqlite-jdbc indir + arm64 dylib doğrula
+  deps         sqlite-jdbc indir + $JH_ARCH dylib doğrula
   shim         eawt-shim derle
   textkeys     macOS metin kısayolları javaagent'ını derle (Option+Delete vb.)
   zoom         macOS trackpad zoom javaagent'ını derle (Cmd+iki parmak)

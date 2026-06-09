@@ -5,6 +5,10 @@ Mac'lerde **Rosetta olmadan** native çalıştırır. Rosetta çeviri katmanı o
 **daha hızlı** açılır ve çalışır. Java gömülü gelir; ayrıca bir şey kurmaya gerek yoktur
 ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 
+> 💻 **Intel Mac'iniz mi var?** Aşağıdaki tüm mimari-bağımsız iyileştirmeler (keskin metin,
+> modern ikonlar, Mac kısayolları, native pencereler, e-imza, PDF Türkçe harf) Intel'de de
+> geçerli. Kurulum komutu için bkz. **[Intel işlemcili Mac'ler için](#-intel-işlemcili-macler-için)**.
+
 ![UDE — modern Material ikonlar ve Retina'da keskin metin](assets/ekran-goruntusu.jpeg)
 
 > Modern Material ikonlar + Java 11 HiDPI ile **Retina'da keskin** metin ve arayüz.
@@ -63,17 +67,39 @@ yoktur.)
 **Yeni Editör sürümü çıktığında yukarıdaki tek satırı yeniden çalıştırmanız yeterli. En
 güncel sürüm otomatik inecek ve yamalanacak.**
 
+## 💻 Intel işlemcili Mac'ler için
 
+Mac'iniz Intel (x86_64) işlemcili ise — yani Apple Silicon (M1/M2/M3/M4) **değilse** —
+aynı kurulumu şu **tek satırla** yapın (Apple Silicon'dakinin aksine `arch -arm64`
+**yoktur**; Intel zaten yalnız x86_64'tür):
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
+```
+
+> Mimarinizden emin değil misiniz? Sol üstteki **Apple () menüsü → Bu Mac Hakkında**'ya
+> bakın: **"Apple M…"** yazıyorsa üstteki Apple Silicon komutunu, **"Intel"** yazıyorsa
+> bu komutu kullanın. (Betik mimariyi kendisi de algılar; yanlış komutu çalıştırırsanız
+> sizi uyarır.)
+
+Intel'de resmî UDE paketi zaten x86_64 olduğu için burada kazanç "Rosetta'sız native hız"
+**değildir**; kazanç şunlardır: **Java 11 ile Retina'da keskin metin**, **modern Material
+ikonlar**, **Mac klavye kısayolları**, **native macOS Aç/Kaydet pencereleri**, **trackpad /
+⌘ ile yakınlaştırma**, **e-imza (akıllı kart) düzeltmesi** ve **PDF dışa aktarımında Türkçe
+harfler**. Yani mimariye bağlı olmayan tüm iyileştirmeler Intel'de de geçerlidir.
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
 
-Akıllı kart / e-imza sürücünüzün de Apple Silicon (arm64) sürümünün kurulu olması gerekir.
+Akıllı kart / e-imza sürücünüzün de Mac'inizin mimarisine uygun sürümünün kurulu olması
+gerekir. TÜBİTAK BİLGEM AKİS — Destek/İndirme sayfasından
+(<https://akiskart.bilgem.tubitak.gov.tr/destek/>):
 
-1. TÜBİTAK BİLGEM AKİS — Destek/İndirme sayfasından
-   (<https://akiskart.bilgem.tubitak.gov.tr/destek/>) **"Mac OS Arm (Apple Silicon)"**
-   başlığı altındaki güncel paketi indirin (ör. `Akia_macos_arm_6_8_9.pkg`).
-   **"Mac OS Intel"** paketini değil, **Arm** paketini seçin.
-2. İndirilen `.pkg`'a çift tıklayıp kurulumu tamamlayın (yönetici şifresi ister).
+- **Apple Silicon (M1/M2/M3/M4):** **"Mac OS Arm (Apple Silicon)"** başlığı altındaki
+  güncel paketi indirin (ör. `Akia_macos_arm_6_8_9.pkg`).
+- **Intel:** **"Mac OS Intel"** başlığı altındaki paketi indirin.
+
+İndirilen `.pkg`'a çift tıklayıp kurulumu tamamlayın (yönetici şifresi ister). Mac'inizin
+mimarisine **uymayan** paketi seçmeyin.
 
 ### ⌨️ Klavye kısayolları
 
@@ -88,6 +114,13 @@ Yukarıdaki adımlar derlemek için yeterlidir. Bu bölüm, dönüşümün **ney
 ve tek tek build hedeflerini açıklar.
 
 ## Neyi nasıl çözüyor
+
+Build, çalıştığı Mac'in mimarisini `uname -m` ile **otomatik algılar** (Apple Silicon=arm64,
+Intel=x86_64) ve gömülecek Java ile launcher'ı o mimari için üretir. Aşağıdaki çözümler
+arm64'ün özgün gerekçesiyle anlatılır; **2, 3, 6, 7, 8, 9** maddeleri mimariden bağımsızdır
+ve Intel'de de aynen geçerlidir. Madde 4 (sqlite) arm64'te zorunluydu (3.7.2'nin arm64
+native'i yoktu); Intel'de 3.7.2 zaten x86_64 native içerir ama tek tip build için 3.46.x'e
+geçiş orada da uygulanır (jar hem `Mac/aarch64` hem `Mac/x86_64` dylib taşır).
 
 Resmî paket x86_64. Native arm64 için:
 
@@ -154,15 +187,18 @@ Resmî paket x86_64. Native arm64 için:
 
 ## Gereksinimler (yalnızca build için)
 
-- Apple Silicon Mac
-- **arm64 Java 11** (gömülecek runtime) — yoksa `make jdk` Azul Zulu 11'i kurar
+- macOS Mac (Apple Silicon **veya** Intel — mimari `uname -m` ile otomatik algılanır)
+- **Java 11** (gömülecek runtime, Mac'inizin mimarisi için) — yoksa `make jdk` Azul Zulu 11'i kurar
 - **jpackage'lı 17+ JDK** (jpackage + shim derlemesi) — yoksa `make jpackage-jdk` Azul Zulu 21'i kurar
 - `curl`, `unzip`, `zip`, `codesign`, `plutil` (macOS'ta hazır gelir)
+
+> Build, host mimarisi için derler: Apple Silicon'da arm64, Intel'de x86_64 (çapraz
+> derleme yapılmaz; gömülecek Java ve jpackage host mimarisiyle eşleşir).
 
 ## Kullanım
 
 ```bash
-make jdk           # gömülecek arm64 Java 11 yoksa kur
+make jdk           # gömülecek Java 11 yoksa kur (host mimarisi)
 make jpackage-jdk  # jpackage'lı 17+ JDK yoksa kur
 make all           # build/Uyap Doküman Editörü.app üret
 ICONS=1 make all   # + modern Material/Retina ikonlar (yayın sürümleri böyle)
@@ -172,9 +208,9 @@ ICONS=1 make all   # + modern Material/Retina ikonlar (yayın sürümleri böyle
 
 ```
 make help        # tüm hedefler
-make check-deps  # araç + arm64 Java 11 + jpackage denetimi
+make check-deps  # araç + Java 11 (host mimarisi) + jpackage denetimi
 make download    # paketi indir + kaynağı aç
-make deps        # sqlite-jdbc indir + arm64 dylib doğrula
+make deps        # sqlite-jdbc indir + host mimarisi dylib doğrula
 make shim        # eawt-shim derle (Java 11 com.apple.eawt yerine)
 make patch       # editor-app.jar yamala (sqlite swap + eawt çıkar)
 make package     # jpackage ile .app üret (Java 11 + shim, .udf ilişkilendirmeli)
@@ -197,6 +233,10 @@ UDE_URL="https://rayp.adalet.gov.tr/.../yeni-paket.zip" make all
 çalıştırır ve `.app`'i imzayı bozmadan zip'ler. Sürüm, UDE sürümünden türetilir:
 `<ude_surumu>_<N>` (ör. `5.4.17_1`). Bu yalnızca derlemenin doğrulanması/kişisel kullanım
 içindir; bu depo **hazır paket dağıtmaz** (bkz. en üstteki not).
+
+> Not: CI yalnızca arm64 runner kullanır; Intel (x86_64) build'i yerelde bir Intel Mac'te
+> (`bash kur.sh` veya `make all`) üretilir. İstenirse `macos-13` Intel runner ile ayrı bir
+> CI işi eklenebilir.
 
 ---
 

@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# kur.sh — UDE'yi Apple Silicon Mac'te tek komutla derleyip kuran yardımcı betik.
+# kur.sh — UDE'yi macOS'ta (Apple Silicon veya Intel) tek komutla derleyip kuran betik.
+# Mimari otomatik algılanır; build çalıştığı Mac için (arm64/x86_64) üretilir.
 #
 # README'deki adımları (geliştirici araçları + kaynak kodun indirilmesi +
 # Java'ların indirilmesi + derleme + paketleme + Applications'a taşıma) sizin için
 # sırayla yapar. Programcı olmanıza gerek yok.
 #
 # İki şekilde çalışır:
-#   • İnternetten tek satırla:
+#   • İnternetten tek satırla (Apple Silicon):
 #       arch -arm64 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
+#     Intel'de:
+#       bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
 #     (kaynak kodu kendisi indirir, derler ve kurar)
 #   • Depoyu zaten indirdiyseniz, klasörün içinde:  ./kur.sh
 #
@@ -51,18 +54,29 @@ ensure_clt() {
 }
 
 # ----- 0) Ortam kontrolü -----
+# Mimari otomatik: arm64 (Apple Silicon) ya da x86_64 (Intel) kabul edilir. Yalnız
+# Apple Silicon'da Rosetta terminali (proc_translated=1) reddedilir; orada x86_64
+# üretmek yanlış olur (Mac aslında arm64).
 step "Ortam denetimi"
 [ "$(uname -s)" = "Darwin" ] || die "Bu betik yalnızca macOS içindir."
-if [ "$(uname -m)" != "arm64" ]; then
-	if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = "1" ]; then
-		die "Terminaliniz Rosetta (x86_64) modunda çalışıyor; Mac'iniz Apple Silicon olsa da betik bunu göremiyor.
+ARCH="$(uname -m)"
+case "$ARCH" in
+	arm64)
+		ok "Apple Silicon Mac algılandı"
+		;;
+	x86_64)
+		if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+			die "Terminaliniz Rosetta (x86_64) modunda çalışıyor; Mac'iniz Apple Silicon olsa da betik bunu göremiyor.
   Çözüm 1 — komutu arm64 zorlayarak çalıştırın:
     ${BOLD}arch -arm64 bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)\"${RST}
   Çözüm 2 — Terminal'in ${BOLD}Bilgi Al${RST} (⌘I) penceresinde ${BOLD}\"Rosetta kullanarak aç\"${RST} işaretini kaldırıp terminali yeniden açın."
-	fi
-	die "Bu betik Apple Silicon (M1/M2/M3/M4) içindir. Mevcut mimari: $(uname -m)"
-fi
-ok "Apple Silicon Mac algılandı"
+		fi
+		ok "Intel Mac algılandı"
+		;;
+	*)
+		die "Desteklenmeyen mimari: $ARCH (yalnız arm64 / x86_64)."
+		;;
+esac
 
 # ----- Önyükleme: depo klasörünün içinde miyiz? -----
 # curl ... | bash ile çalıştırıldığında BASH_SOURCE boş/geçersiz olur; bu durumda
@@ -139,7 +153,12 @@ printf '\n'
 ok "${BOLD}BİTTİ.${RST} UDE artık Launchpad ve Applications'ta. .udf dosyalarına çift tıklayarak da açabilirsiniz."
 say "Açmak için: ${BOLD}open \"$DEST_APP\"${RST}"
 printf '\n'
-warn "E-imza kullanacaksanız: TÜBİTAK AKİS'in ${BOLD}Apple Silicon (Arm)${RST} sürücüsünü kurun"
-say "  https://akiskart.bilgem.tubitak.gov.tr/destek/  → \"Mac OS Arm (Apple Silicon)\""
+if [ "$ARCH" = "arm64" ]; then
+	warn "E-imza kullanacaksanız: TÜBİTAK AKİS'in ${BOLD}Apple Silicon (Arm)${RST} sürücüsünü kurun"
+	say "  https://akiskart.bilgem.tubitak.gov.tr/destek/  → \"Mac OS Arm (Apple Silicon)\""
+else
+	warn "E-imza kullanacaksanız: TÜBİTAK AKİS'in ${BOLD}Mac OS Intel${RST} sürücüsünü kurun"
+	say "  https://akiskart.bilgem.tubitak.gov.tr/destek/  → \"Mac OS Intel\""
+fi
 printf '\n'
 say "Yeni UDE sürümü çıktığında bu betiği yeniden çalıştırmanız yeterli (en güncel sürüm otomatik iner)."
