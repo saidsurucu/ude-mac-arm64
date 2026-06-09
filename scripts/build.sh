@@ -415,7 +415,7 @@ apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
 apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ -z "$SKIN" ] && return 0
-	if unzip -l "$JAR" 2>/dev/null | grep 'macosskin/FlatUdeSkin.class' >/dev/null 2>&1; then
+	if unzip -l "$JAR" 2>/dev/null | grep 'macosskin/.skin-patched' >/dev/null 2>&1; then
 		c_ok "[skin] zaten yamalı, atlandı."; return 0
 	fi
 	c_info "[skin] modern düz skin + Flamingo şerit yaması…"
@@ -440,6 +440,8 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	"$jr" -cp "$BUILD/_skinpatch:$jvs" SkinPatch "$JAR" "$BUILD/_skinpatch/out" \
 		|| die "[skin] çekirdek yama uygulanamadı (UDE/Substance sürümü değişmiş olabilir)."
 	( cd "$BUILD/_skinpatch/out" && zip -q -r "$JAR" . -x '.*' )
+	# başarı işareti: idempotans guard'ı yalnız patcher başarılıysa tetiklenir
+	( cd "$BUILD/_skinpatch/out" && mkdir -p macosskin && : > macosskin/.skin-patched && zip -q "$JAR" macosskin/.skin-patched )
 	c_ok "[skin] FlatUdeSkin kuruldu (düz painter)."
 }
 
