@@ -7,13 +7,11 @@ import java.awt.Frame;
 import java.awt.Window;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.PrintStream;
 
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileFilter;
-import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
  * macOS native dosya pencereleri köprüsü. UDE'nin JFileChooser.show* çağrıları
@@ -98,23 +96,10 @@ public final class MacFileDialog {
             String d;
             File[] multi;
             try {
-                // Filtre koruma (en iyi çaba): FileNameExtensionFilter için setFile("*.ext")
-            // glob ipucu + setFilenameFilter yedeği. UYARI: modern macOS NSOpenPanel/
-            // NSSavePanel her ikisini de JDK/OS sürümüne göre yok sayabilir (UTI tabanlı
-            // allowedContentTypes java.awt.FileDialog'dan ayarlanamaz) → süzme bazı
-            // sürümlerde etkisiz olabilir; native pencere tüm dosyaları gösterir.
-                final FileFilter ff = fc.getFileFilter();
-                boolean acceptAll = (ff == null) || ff.equals(fc.getAcceptAllFileFilter());
-                if (!acceptAll) {
-                    if (mode == FileDialog.LOAD && sel == null && ff instanceof FileNameExtensionFilter) {
-                        String[] exts = ((FileNameExtensionFilter) ff).getExtensions();
-                        if (exts != null && exts.length > 0) fd.setFile("*." + exts[0]);
-                    }
-                    fd.setFilenameFilter(new FilenameFilter() {
-                        public boolean accept(File dd, String n) { return ff.accept(new File(dd, n)); }
-                    });
-                }
-
+                // Katı dosya filtresi UYGULANMAZ: macOS NSOpenPanel filtreyi onurlandırdığında
+                // .udf dışı dosyalar (rtf/xml/usf) gizleniyordu; NSSavePanel'de FilenameFilter
+                // isim alanını bozuyordu. Format/uzantı mantığı UDE'nin kendi JFileChooser
+                // durumunda kalır; LOAD'da seçim sonrası eşleşen filtre ayarlanır (aşağıda).
                 fd.setVisible(true);
             } finally {
                 if (dirMode) {
@@ -130,13 +115,20 @@ public final class MacFileDialog {
             }
             d = fd.getDirectory();
             multi = fd.getFiles();
+            File chosen;
             if (fc.isMultiSelectionEnabled() && multi != null && multi.length > 0) {
                 fc.setSelectedFiles(multi);
                 fc.setSelectedFile(multi[0]);
+                chosen = multi[0];
             } else {
-                fc.setSelectedFile(new File(d, name));
+                chosen = new File(d, name);
+                fc.setSelectedFile(chosen);
             }
             if (d != null) fc.setCurrentDirectory(new File(d));
+            if (mode == FileDialog.LOAD) {
+                FileFilter mf = matchChoosableFilter(fc, chosen);
+                if (mf != null) fc.setFileFilter(mf);
+            }
             log("seçildi: " + d + name);
             return JFileChooser.APPROVE_OPTION;
         } catch (Throwable t) {
