@@ -48,6 +48,23 @@ public final class MacFileDialog {
         return show(fc, parent, mode);
     }
 
+    /**
+     * Seçilen dosyayı kabul eden ilk accept-all-olmayan choosable filtreyi döndürür;
+     * yoksa null. Native panelde filtre açılır listesi olmadığından, seçimden sonra
+     * UDE'nin fc.getFileFilter()'ının doğru ayrıştırıcıya işaret etmesini sağlamak için.
+     */
+    static FileFilter matchChoosableFilter(JFileChooser fc, File f) {
+        if (fc == null || f == null) return null;
+        FileFilter acceptAll = fc.getAcceptAllFileFilter();
+        FileFilter[] all = fc.getChoosableFileFilters();
+        if (all == null) return null;
+        for (FileFilter ff : all) {
+            if (ff == null || ff.equals(acceptAll)) continue;
+            if (ff.accept(f)) return ff;
+        }
+        return null;
+    }
+
     private static int show(JFileChooser fc, Component parent, int mode) {
         try {
             Window owner = (parent instanceof Window) ? (Window) parent
