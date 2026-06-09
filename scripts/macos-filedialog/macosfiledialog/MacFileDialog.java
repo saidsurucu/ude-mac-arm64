@@ -92,6 +92,46 @@ public final class MacFileDialog {
         @Override public String toString() { return label; }
     }
 
+    /**
+     * Native panel açılmadan önce format seçtiren modal pencere.
+     * filters: accept-all olmayan choosable filtreler (>=2). current: o an seçili filtre.
+     * currentFileName: ön-doldurulan ad (varsayılan seçimi belgenin uzantısına çekmek için).
+     * Dönüş: seçilen FileFilter; İptal/kapatma → null (kaydetme iptal).
+     */
+    private static FileFilter promptFormat(Window owner, java.util.List<FileFilter> filters,
+                                           FileFilter current, String currentFileName) {
+        FormatItem[] items = new FormatItem[filters.size()];
+        int defaultIdx = 0;
+        for (int i = 0; i < filters.size(); i++) {
+            FileFilter ff = filters.get(i);
+            String ext = probeExtension(ff);
+            String label = friendlyLabel(ext);
+            if (label == null) {
+                String desc = ff.getDescription();
+                label = (desc != null && !desc.isEmpty()) ? desc : "Bilinmeyen";
+            }
+            items[i] = new FormatItem(label, ff, ext);
+            if (current != null && ff.equals(current)) defaultIdx = i;
+        }
+        // Belgenin mevcut uzantısına uyan formatı, seçili filtreye tercih et.
+        String curExt = knownExtOf(currentFileName);
+        if (curExt != null) {
+            for (int i = 0; i < items.length; i++) {
+                if (curExt.equals(items[i].ext)) { defaultIdx = i; break; }
+            }
+        }
+        javax.swing.JComboBox<FormatItem> combo = new javax.swing.JComboBox<FormatItem>(items);
+        combo.setSelectedIndex(defaultIdx);
+        int res = javax.swing.JOptionPane.showOptionDialog(
+            owner, combo, "Kaydetme Biçimi",
+            javax.swing.JOptionPane.OK_CANCEL_OPTION, javax.swing.JOptionPane.PLAIN_MESSAGE,
+            null, new Object[]{"Tamam", "İptal"}, "Tamam");
+        // options verildiğinde dönüş = seçilen seçeneğin indeksi (0=Tamam) veya CLOSED_OPTION(-1).
+        if (res != 0) return null;
+        FormatItem sel = (FormatItem) combo.getSelectedItem();
+        return (sel != null) ? sel.filter : null;
+    }
+
     private static void log(String m) {
         if (!"1".equals(System.getProperty("macosfiledialog.debug"))) return;
         try (PrintStream p = new PrintStream(new FileOutputStream("/tmp/macos-filedialog.log", true), true, "UTF-8")) {
@@ -192,6 +232,36 @@ public final class MacFileDialog {
                 if (docName != null && !docName.isEmpty()) fd.setFile(docName);
             }
 
+            // SAVE: native panelde format dropdown'ı yok. 2+ filtre varsa önce
+            // format seçtir; tek filtre varsa sessizce uzantıyı belirle. Hedef
+            // uzantı hem ön-doldurulan ada hem dönen ada (aşağıda) zorlanır.
+            String targetExt = null;
+            if (mode == FileDialog.SAVE) {
+                java.util.List<FileFilter> real = new java.util.ArrayList<FileFilter>();
+                FileFilter acceptAll = fc.getAcceptAllFileFilter();
+                FileFilter[] choosable = fc.getChoosableFileFilters();
+                if (choosable != null) {
+                    for (FileFilter ff : choosable) {
+                        if (ff != null && !ff.equals(acceptAll)) real.add(ff);
+                    }
+                }
+                if (real.size() >= 2) {
+                    FileFilter chosen = promptFormat(owner, real, fc.getFileFilter(), fd.getFile());
+                    if (chosen == null) {
+                        log("format penceresi iptal (mode=SAVE)");
+                        return JFileChooser.CANCEL_OPTION;
+                    }
+                    fc.setFileFilter(chosen);
+                    targetExt = probeExtension(chosen);
+                } else if (real.size() == 1) {
+                    targetExt = probeExtension(real.get(0));
+                }
+                if (targetExt != null) {
+                    String pre = fd.getFile();
+                    if (pre != null && !pre.isEmpty()) fd.setFile(forceExtension(pre, targetExt));
+                }
+            }
+
             if (fc.isMultiSelectionEnabled()) fd.setMultipleMode(true);
 
             // Dizin seçimi (savunmacı; UDE'de görülmedi)
@@ -222,6 +292,9 @@ public final class MacFileDialog {
             if (name == null) {
                 log("iptal (mode=" + mode + ")");
                 return JFileChooser.CANCEL_OPTION;
+            }
+            if (mode == FileDialog.SAVE && targetExt != null) {
+                name = forceExtension(name, targetExt);
             }
             d = fd.getDirectory();
             multi = fd.getFiles();
