@@ -182,6 +182,11 @@ Resmî paket x86_64. Native arm64 için:
    `⌘F`→bul, `⌘T`→yazı özellikleri. Mevcut Ctrl kısayolları aynen çalışır; `⌘Q/⌘W/⌘H/⌘M` gibi
    gerçek macOS kısayollarına dokunulmaz.
 
+10. **Modern düz görünüm** (`SKIN=1`) → Menüler, paneller, şerit ve durum çubuğu degradesiz
+    nötr açık renklere geçer; arayüz yazı tipi modernleşir; belge çevresindeki eski turkuaz
+    arka plan nötr griye düzeltilir. Şerit düzeni ve belge içeriği değişmez. Varsayılan
+    olarak kapalıdır; yayın sürümlerinde isteğe bağlı kullanılır.
+
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
 
@@ -201,7 +206,8 @@ Resmî paket x86_64. Native arm64 için:
 make jdk           # gömülecek Java 11 yoksa kur (host mimarisi)
 make jpackage-jdk  # jpackage'lı 17+ JDK yoksa kur
 make all           # build/Uyap Doküman Editörü.app üret
-ICONS=1 make all   # + modern Material/Retina ikonlar (yayın sürümleri böyle)
+ICONS=1 make all            # + modern Material/Retina ikonlar (yayın sürümleri böyle)
+SKIN=1 ICONS=1 make all    # + modern düz görünüm (SKIN=1 opsiyonel)
 ```
 
 ### Diğer hedefler
