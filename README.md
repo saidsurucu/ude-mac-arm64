@@ -19,6 +19,14 @@ ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 > gömülü Java artık PCSC üzerinden kartı görüyor ve imzalama akışı baştan sona
 > çalışıyor. Belge açma/düzenleme de sorunsuz.
 
+> 🗂️ **Native macOS dosya pencereleri:** Aç / Kaydet / Farklı Kaydet artık eski
+> görünümlü Java penceresi yerine macOS'un **kendi** dosya penceresini kullanır —
+> Finder kenar çubuğu, iCloud Drive, son kullanılanlar ve `.udf` filtresiyle.
+
+![UDE — native macOS Aç/Kaydet penceresi](assets/native-dosya-penceresi.png)
+
+> Aç/Kaydet pencereleri artık macOS'un native dosya seçicisi.
+
 > 📦 **Hazır (paketlenmiş) uygulama dağıtılmaz.** İşgüzarlarla uğraşmak istemediğim
 > için paketlenmiş hâlini dağıtmıyorum; uygulamayı **kendiniz derleyip paketlersiniz**.
 > Bu sayfada bir "Releases" / hazır indirme bağlantısı **bulmazsınız**. Aşağıdaki adımlar
