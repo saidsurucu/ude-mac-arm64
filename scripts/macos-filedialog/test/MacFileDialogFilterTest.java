@@ -41,6 +41,19 @@ public class MacFileDialogFilterTest {
         check("null dosya null doner",
               MacFileDialog.matchChoosableFilter(fc, null) == null);
 
+        check("forceExtension udf->xml strip",
+              MacFileDialog.forceExtension("belge.udf", "xml").equals("belge.xml"));
+        check("forceExtension uzantisiz ekler",
+              MacFileDialog.forceExtension("belge", "udf").equals("belge.udf"));
+        check("forceExtension ara nokta korunur",
+              MacFileDialog.forceExtension("belge.2024.udf", "rtf").equals("belge.2024.rtf"));
+        check("forceExtension buyuk-kucuk harf",
+              MacFileDialog.forceExtension("Belge.UDF", "xml").equals("Belge.xml"));
+        check("forceExtension ayni uzanti no-op",
+              MacFileDialog.forceExtension("belge.xml", "xml").equals("belge.xml"));
+        check("forceExtension bilinmeyen uzanti korunur",
+              MacFileDialog.forceExtension("belge.docx", "udf").equals("belge.docx.udf"));
+
         if (failures > 0) { System.out.println(failures + " test BASARISIZ"); System.exit(1); }
         System.out.println("Tum testler GECTI");
     }

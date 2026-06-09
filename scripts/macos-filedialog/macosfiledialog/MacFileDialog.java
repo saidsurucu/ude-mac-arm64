@@ -25,6 +25,31 @@ import javax.swing.filechooser.FileFilter;
 public final class MacFileDialog {
     private MacFileDialog() {}
 
+    /** Format/uzantı zorlamada tanınan UDE uzantıları (sıra = probe önceliği). */
+    private static final String[] KNOWN_EXTS = {"udf", "rtf", "pdf", "xml", "usf"};
+
+    /** Ad sonundaki bilinen UDE uzantısını (case-insensitive) döndürür; yoksa null. */
+    static String knownExtOf(String name) {
+        if (name == null) return null;
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) return null;
+        String ext = name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+        for (String k : KNOWN_EXTS) if (k.equals(ext)) return ext;
+        return null;
+    }
+
+    /**
+     * Dosya adının uzantısını hedef uzantıya getirir: ad sonundaki bilinen UDE
+     * uzantısını (varsa) söküp ".ext" ekler. Yalnız bilinen uzantı sökülür; ara
+     * noktalar ve bilinmeyen uzantılar korunur. Çift uzantıyı (belge.udf.xml) önler.
+     */
+    static String forceExtension(String name, String ext) {
+        if (name == null || ext == null || ext.isEmpty()) return name;
+        String known = knownExtOf(name);
+        String base = (known != null) ? name.substring(0, name.length() - known.length() - 1) : name;
+        return base + "." + ext;
+    }
+
     private static void log(String m) {
         if (!"1".equals(System.getProperty("macosfiledialog.debug"))) return;
         try (PrintStream p = new PrintStream(new FileOutputStream("/tmp/macos-filedialog.log", true), true, "UTF-8")) {
