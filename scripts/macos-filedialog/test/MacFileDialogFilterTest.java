@@ -81,6 +81,15 @@ public class MacFileDialogFilterTest {
         check("probeExtension cok-uzantili ilk esleseni doner",
               "udf".equals(MacFileDialog.probeExtension(multi)));
 
+        check("friendlyLabel udf etiketi",
+              "UDF Belgesi (.udf)".equals(MacFileDialog.friendlyLabel("udf")));
+        check("friendlyLabel rtf etiketi",
+              "Word / RTF (.rtf)".equals(MacFileDialog.friendlyLabel("rtf")));
+        check("friendlyLabel bilinmeyen null",
+              MacFileDialog.friendlyLabel("docx") == null);
+        check("friendlyLabel null null",
+              MacFileDialog.friendlyLabel(null) == null);
+
         if (failures > 0) { System.out.println(failures + " test BASARISIZ"); System.exit(1); }
         System.out.println("Tum testler GECTI");
     }

@@ -65,6 +65,30 @@ public final class MacFileDialog {
         return null;
     }
 
+    /** Uzantı için kullanıcıya gösterilecek dostça etiket; bilinmeyen/null → null. */
+    static String friendlyLabel(String ext) {
+        if (ext == null) return null;
+        switch (ext) {
+            case "udf": return "UDF Belgesi (.udf)";
+            case "rtf": return "Word / RTF (.rtf)";
+            case "pdf": return "PDF (.pdf)";
+            case "xml": return "XML (.xml)";
+            case "usf": return "USF (.usf)";
+            default: return null;
+        }
+    }
+
+    /** Format penceresi combobox öğesi: görünür etiket + arkadaki filtre + uzantı. */
+    private static final class FormatItem {
+        final String label;
+        final FileFilter filter;
+        final String ext;
+        FormatItem(String label, FileFilter filter, String ext) {
+            this.label = label; this.filter = filter; this.ext = ext;
+        }
+        @Override public String toString() { return label; }
+    }
+
     private static void log(String m) {
         if (!"1".equals(System.getProperty("macosfiledialog.debug"))) return;
         try (PrintStream p = new PrintStream(new FileOutputStream("/tmp/macos-filedialog.log", true), true, "UTF-8")) {
