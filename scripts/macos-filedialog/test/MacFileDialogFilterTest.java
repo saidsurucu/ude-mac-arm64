@@ -85,6 +85,14 @@ public class MacFileDialogFilterTest {
               "UDF Belgesi (.udf)".equals(MacFileDialog.friendlyLabel("udf")));
         check("friendlyLabel rtf etiketi",
               "Word / RTF (.rtf)".equals(MacFileDialog.friendlyLabel("rtf")));
+        check("friendlyLabel pdf etiketi",
+              "PDF (.pdf)".equals(MacFileDialog.friendlyLabel("pdf")));
+        check("friendlyLabel xml etiketi",
+              "XML (.xml)".equals(MacFileDialog.friendlyLabel("xml")));
+        check("friendlyLabel usf etiketi",
+              "USF (.usf)".equals(MacFileDialog.friendlyLabel("usf")));
+        check("friendlyLabel buyuk-kucuk harf duyarsiz",
+              "PDF (.pdf)".equals(MacFileDialog.friendlyLabel("PDF")));
         check("friendlyLabel bilinmeyen null",
               MacFileDialog.friendlyLabel("docx") == null);
         check("friendlyLabel null null",

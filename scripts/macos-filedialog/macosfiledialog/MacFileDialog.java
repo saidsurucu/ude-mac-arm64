@@ -68,6 +68,7 @@ public final class MacFileDialog {
     /** Uzantı için kullanıcıya gösterilecek dostça etiket; bilinmeyen/null → null. */
     static String friendlyLabel(String ext) {
         if (ext == null) return null;
+        ext = ext.toLowerCase(java.util.Locale.ROOT);
         switch (ext) {
             case "udf": return "UDF Belgesi (.udf)";
             case "rtf": return "Word / RTF (.rtf)";
@@ -84,7 +85,9 @@ public final class MacFileDialog {
         final FileFilter filter;
         final String ext;
         FormatItem(String label, FileFilter filter, String ext) {
-            this.label = label; this.filter = filter; this.ext = ext;
+            this.label = label;
+            this.filter = filter;
+            this.ext = ext;
         }
         @Override public String toString() { return label; }
     }
