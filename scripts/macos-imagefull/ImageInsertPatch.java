@@ -47,6 +47,8 @@ public class ImageInsertPatch {
                 public void edit(MethodCall m) throws javassist.CannotCompileException {
                     if (m.getMethodName().equals("drawImage")
                             && m.getSignature().equals("(Ljava/awt/Image;IIIILjava/awt/image/ImageObserver;)Z")) {
+                        // __old==null ise önceki interpolation hint yoktu → BICUBIC bu
+                        // paint çağrısının kalanında bilerek set kalır (yalnızca image ops'u etkiler).
                         m.replace(
                             "{ if ($0 instanceof java.awt.Graphics2D) {"
                           + "    java.awt.Graphics2D g2 = (java.awt.Graphics2D)$0;"
@@ -54,7 +56,6 @@ public class ImageInsertPatch {
                           + "    g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,"
                           + "        java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);"
                           + "    $_ = $proceed($$);"
-                          + "    // __old==null: önceki hint yoktu → BICUBIC bu paint çağrısının kalanında bilerek set kalır"
                           + "    if (__old != null) g2.setRenderingHint("
                           + "        java.awt.RenderingHints.KEY_INTERPOLATION, __old);"
                           + "  } else { $_ = $proceed($$); } }");
