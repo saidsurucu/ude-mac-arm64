@@ -425,8 +425,9 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
 	# 1) FlatUdeSkin'i jar'a karşı derle + enjekte et (patcher'dan ÖNCE)
 	rm -rf "$BUILD/_skinhelper"; mkdir -p "$BUILD/_skinhelper"
-	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_skinhelper" "$SKIN_SRC/macosskin/FlatUdeSkin.java" \
-		|| { c_warn "[skin] FlatUdeSkin derlenemedi; yama atlandı."; return 0; }
+	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_skinhelper" \
+		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatFontPolicy.java" \
+		|| { c_warn "[skin] skin helper'ları derlenemedi; yama atlandı."; return 0; }
 	# colorschemes resource'unu (varsa) helper ağacına kopyala (Task 3'te oluşur)
 	if [ -f "$SKIN_SRC/macosskin/flatude.colorschemes" ]; then
 		cp "$SKIN_SRC/macosskin/flatude.colorschemes" "$BUILD/_skinhelper/macosskin/"
