@@ -33,9 +33,11 @@ ICONS_SRC="$SCRIPT_DIR/icons"
 TEXTKEYS_SRC="$SCRIPT_DIR/macos-textkeys"
 ZOOM_SRC="$SCRIPT_DIR/macos-zoom"
 FOP_SRC="$SCRIPT_DIR/macos-fop"
+FD_SRC="$SCRIPT_DIR/macos-filedialog"   # native macOS dosya pencereleri yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
+FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencereleri) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -333,6 +335,33 @@ LiberationSans-BoldItalic.ttf:libsans-bolditalic.xml"
 	c_ok "[fop] PDF Türkçe harf yaması uygulandı (metrikler package'da pakete konur)."
 }
 
+apply_filedialog() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$FILEDIALOG" = "1" ] || return 0
+	# İdempotans: helper zaten enjekte edilmişse atla (çağrı yeniden yazımı tek seferlik)
+	if unzip -l "$JAR" 2>/dev/null | grep 'macosfiledialog/MacFileDialog.class' >/dev/null 2>&1; then
+		c_ok "[filedialog] zaten yamalı, atlandı."; return 0
+	fi
+	c_info "[filedialog] native macOS dosya pencereleri yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[filedialog] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[filedialog] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ikon/fop yamasıyla ortak)
+	# 1) köprü sınıfını jar'a karşı derle + enjekte et (patcher'dan ÖNCE)
+	rm -rf "$BUILD/_fdhelper"; mkdir -p "$BUILD/_fdhelper"
+	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_fdhelper" "$FD_SRC/macosfiledialog/MacFileDialog.java" \
+		|| { c_warn "[filedialog] köprü sınıfı derlenemedi; yama atlandı."; return 0; }
+	( cd "$BUILD/_fdhelper" && zip -q -r "$JAR" macosfiledialog )
+	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
+	rm -rf "$BUILD/_fdpatch"; mkdir -p "$BUILD/_fdpatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_fdpatch" "$FD_SRC/FileDialogPatch.java" \
+		|| { c_warn "[filedialog] FileDialogPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_fdpatch:$jvs" FileDialogPatch "$JAR" "$BUILD/_fdpatch/out" \
+		|| die "[filedialog] çağrılar yamalanamadı (UDE sürümü değişmiş olabilir)."
+	( cd "$BUILD/_fdpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[filedialog] native dosya pencereleri yaması uygulandı."
+}
+
 patch_jar() {
 	local JAR="$SRC_APP_DIR/app/Contents/Java/editor-app.jar"
 	[ -s "$JAR" ] || die "Önce 'download' çalıştır."
@@ -348,6 +377,7 @@ patch_jar() {
 	zip -q -d "$JAR" 'com/apple/eawt/*' 'com/apple/eio/*' >/dev/null 2>&1 || true
 	apply_icons "$JAR"
 	apply_fop_fonts "$JAR"
+	apply_filedialog "$JAR"
 	unzip -l "$JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
 	c_ok "jar yamalandı (sqlite 3.46 + eawt çıkarıldı)"
@@ -481,7 +511,7 @@ Hedefler:
   shim         eawt-shim derle
   textkeys     macOS metin kısayolları javaagent'ını derle (Option+Delete vb.)
   zoom         macOS trackpad zoom javaagent'ını derle (Cmd+iki parmak)
-  patch        editor-app.jar yamala (sqlite swap + eawt çıkar)
+  patch        editor-app.jar yamala (sqlite swap + eawt çıkar + native dosya pencereleri)
   package      jpackage ile .app üret (Java 11 + shim, .udf ilişkilendirmeli)
   sign         ad-hoc codesign
   dmg          sürükle-bırak yerleşimli .dmg üret (create-dmg; DMG_OUT ile ad)
