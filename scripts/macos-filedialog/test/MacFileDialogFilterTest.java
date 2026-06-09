@@ -68,6 +68,16 @@ public class MacFileDialogFilterTest {
         check("knownExtOf sonda nokta null",
               MacFileDialog.knownExtOf("belge.") == null);
 
+        check("probeExtension rtf filtresi",
+              "rtf".equals(MacFileDialog.probeExtension(rtf)));
+        check("probeExtension udf filtresi",
+              "udf".equals(MacFileDialog.probeExtension(udf)));
+        check("probeExtension null filtre null",
+              MacFileDialog.probeExtension(null) == null);
+        FileNameExtensionFilter docx = new FileNameExtensionFilter("Word [.docx]", "docx");
+        check("probeExtension bilinmeyen uzanti null",
+              MacFileDialog.probeExtension(docx) == null);
+
         if (failures > 0) { System.out.println(failures + " test BASARISIZ"); System.exit(1); }
         System.out.println("Tum testler GECTI");
     }

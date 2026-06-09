@@ -50,6 +50,20 @@ public final class MacFileDialog {
         return base + "." + ext;
     }
 
+    /**
+     * Filtrenin uzantısını probe ile bulur: bilinen her uzantı için
+     * ff.accept(new File("p."+ext)) dener, kabul edilen ilk uzantıyı döndürür.
+     * Obfuscated/özel FileFilter alt sınıflarında da çalışır (yalnız accept()'e dayanır).
+     * accept-all filtreleri çağıran taraf zaten dışlar.
+     */
+    static String probeExtension(FileFilter ff) {
+        if (ff == null) return null;
+        for (String ext : KNOWN_EXTS) {
+            if (ff.accept(new File("p." + ext))) return ext;
+        }
+        return null;
+    }
+
     private static void log(String m) {
         if (!"1".equals(System.getProperty("macosfiledialog.debug"))) return;
         try (PrintStream p = new PrintStream(new FileOutputStream("/tmp/macos-filedialog.log", true), true, "UTF-8")) {
