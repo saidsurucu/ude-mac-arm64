@@ -415,12 +415,31 @@ apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
 apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ -z "$SKIN" ] && return 0
+	if unzip -l "$JAR" 2>/dev/null | grep 'macosskin/FlatUdeSkin.class' >/dev/null 2>&1; then
+		c_ok "[skin] zaten yamalı, atlandı."; return 0
+	fi
 	c_info "[skin] modern düz skin + Flamingo şerit yaması…"
 	local jr jc jvs
 	jr="$(java17)"  || { c_warn "[skin] 17+ java yok, yama atlandı."; return 0; }
 	jc="$(javac17)" || { c_warn "[skin] 17+ javac yok, yama atlandı."; return 0; }
 	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
-	c_ok "[skin] (iskelet) — henüz yama yok."
+	# 1) FlatUdeSkin'i jar'a karşı derle + enjekte et (patcher'dan ÖNCE)
+	rm -rf "$BUILD/_skinhelper"; mkdir -p "$BUILD/_skinhelper"
+	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_skinhelper" "$SKIN_SRC/macosskin/FlatUdeSkin.java" \
+		|| { c_warn "[skin] FlatUdeSkin derlenemedi; yama atlandı."; return 0; }
+	# colorschemes resource'unu (varsa) helper ağacına kopyala (Task 3'te oluşur)
+	if [ -f "$SKIN_SRC/macosskin/flatude.colorschemes" ]; then
+		cp "$SKIN_SRC/macosskin/flatude.colorschemes" "$BUILD/_skinhelper/macosskin/"
+	fi
+	( cd "$BUILD/_skinhelper" && zip -q -r "$JAR" macosskin )
+	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
+	rm -rf "$BUILD/_skinpatch"; mkdir -p "$BUILD/_skinpatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_skinpatch" "$SKIN_SRC/SkinPatch.java" \
+		|| { c_warn "[skin] SkinPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_skinpatch:$jvs" SkinPatch "$JAR" "$BUILD/_skinpatch/out" \
+		|| die "[skin] çekirdek yama uygulanamadı (UDE/Substance sürümü değişmiş olabilir)."
+	( cd "$BUILD/_skinpatch/out" && zip -q -r "$JAR" . -x '.*' )
+	c_ok "[skin] FlatUdeSkin kuruldu (düz painter)."
 }
 
 patch_jar() {
