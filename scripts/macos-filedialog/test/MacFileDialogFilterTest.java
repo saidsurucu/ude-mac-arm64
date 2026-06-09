@@ -41,6 +41,63 @@ public class MacFileDialogFilterTest {
         check("null dosya null doner",
               MacFileDialog.matchChoosableFilter(fc, null) == null);
 
+        check("forceExtension udf->xml strip",
+              MacFileDialog.forceExtension("belge.udf", "xml").equals("belge.xml"));
+        check("forceExtension uzantisiz ekler",
+              MacFileDialog.forceExtension("belge", "udf").equals("belge.udf"));
+        check("forceExtension ara nokta korunur",
+              MacFileDialog.forceExtension("belge.2024.udf", "rtf").equals("belge.2024.rtf"));
+        check("forceExtension buyuk-kucuk harf",
+              MacFileDialog.forceExtension("Belge.UDF", "xml").equals("Belge.xml"));
+        check("forceExtension ayni uzanti no-op",
+              MacFileDialog.forceExtension("belge.xml", "xml").equals("belge.xml"));
+        check("forceExtension bilinmeyen uzanti korunur",
+              MacFileDialog.forceExtension("belge.docx", "udf").equals("belge.docx.udf"));
+        check("forceExtension null ad null doner",
+              MacFileDialog.forceExtension(null, "udf") == null);
+        check("forceExtension null ext degismez",
+              MacFileDialog.forceExtension("belge.udf", null).equals("belge.udf"));
+        check("forceExtension bos ext degismez",
+              MacFileDialog.forceExtension("belge.udf", "").equals("belge.udf"));
+        check("knownExtOf null null",
+              MacFileDialog.knownExtOf(null) == null);
+        check("knownExtOf udf taniyor",
+              "udf".equals(MacFileDialog.knownExtOf("belge.udf")));
+        check("knownExtOf docx null",
+              MacFileDialog.knownExtOf("belge.docx") == null);
+        check("knownExtOf sonda nokta null",
+              MacFileDialog.knownExtOf("belge.") == null);
+
+        check("probeExtension rtf filtresi",
+              "rtf".equals(MacFileDialog.probeExtension(rtf)));
+        check("probeExtension udf filtresi",
+              "udf".equals(MacFileDialog.probeExtension(udf)));
+        check("probeExtension null filtre null",
+              MacFileDialog.probeExtension(null) == null);
+        FileNameExtensionFilter docx = new FileNameExtensionFilter("Word [.docx]", "docx");
+        check("probeExtension bilinmeyen uzanti null",
+              MacFileDialog.probeExtension(docx) == null);
+        FileNameExtensionFilter multi = new FileNameExtensionFilter("UDF+RTF", "udf", "rtf");
+        check("probeExtension cok-uzantili ilk esleseni doner",
+              "udf".equals(MacFileDialog.probeExtension(multi)));
+
+        check("friendlyLabel udf etiketi",
+              "UDF Belgesi (.udf)".equals(MacFileDialog.friendlyLabel("udf")));
+        check("friendlyLabel rtf etiketi",
+              "Word / RTF (.rtf)".equals(MacFileDialog.friendlyLabel("rtf")));
+        check("friendlyLabel pdf etiketi",
+              "PDF (.pdf)".equals(MacFileDialog.friendlyLabel("pdf")));
+        check("friendlyLabel xml etiketi",
+              "XML (.xml)".equals(MacFileDialog.friendlyLabel("xml")));
+        check("friendlyLabel usf etiketi",
+              "USF (.usf)".equals(MacFileDialog.friendlyLabel("usf")));
+        check("friendlyLabel buyuk-kucuk harf duyarsiz",
+              "PDF (.pdf)".equals(MacFileDialog.friendlyLabel("PDF")));
+        check("friendlyLabel bilinmeyen null",
+              MacFileDialog.friendlyLabel("docx") == null);
+        check("friendlyLabel null null",
+              MacFileDialog.friendlyLabel(null) == null);
+
         if (failures > 0) { System.out.println(failures + " test BASARISIZ"); System.exit(1); }
         System.out.println("Tum testler GECTI");
     }

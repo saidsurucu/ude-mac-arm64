@@ -25,6 +25,113 @@ import javax.swing.filechooser.FileFilter;
 public final class MacFileDialog {
     private MacFileDialog() {}
 
+    /** Format/uzantı zorlamada tanınan UDE uzantıları (sıra = probe önceliği). */
+    private static final String[] KNOWN_EXTS = {"udf", "rtf", "pdf", "xml", "usf"};
+
+    /** Ad sonundaki bilinen UDE uzantısını (case-insensitive) döndürür; yoksa null. */
+    static String knownExtOf(String name) {
+        if (name == null) return null;
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) return null;
+        String ext = name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+        for (String k : KNOWN_EXTS) if (k.equals(ext)) return ext;
+        return null;
+    }
+
+    /**
+     * Dosya adının uzantısını hedef uzantıya getirir: ad sonundaki bilinen UDE
+     * uzantısını (varsa) söküp ".ext" ekler. Yalnız bilinen uzantı sökülür; ara
+     * noktalar ve bilinmeyen uzantılar korunur. Çift uzantıyı (belge.udf.xml) önler.
+     */
+    static String forceExtension(String name, String ext) {
+        if (name == null || ext == null || ext.isEmpty()) return name;
+        String known = knownExtOf(name);
+        String base = (known != null) ? name.substring(0, name.length() - known.length() - 1) : name;
+        return base + "." + ext;
+    }
+
+    /**
+     * Filtrenin uzantısını probe ile bulur: bilinen her uzantı için
+     * ff.accept(new File("p."+ext)) dener, kabul edilen ilk uzantıyı döndürür.
+     * Obfuscated/özel FileFilter alt sınıflarında da çalışır (yalnız accept()'e dayanır).
+     * Dikkat: accept-all filtreler çağıran tarafça dışlanmalı; geçirilirse "udf" döner.
+     * Birden çok uzantı kabul eden filtrede KNOWN_EXTS sırasındaki ilk eşleşme döner.
+     */
+    static String probeExtension(FileFilter ff) {
+        if (ff == null) return null;
+        for (String ext : KNOWN_EXTS) {
+            if (ff.accept(new File("p." + ext))) return ext;
+        }
+        return null;
+    }
+
+    /** Uzantı için kullanıcıya gösterilecek dostça etiket; bilinmeyen/null → null. */
+    static String friendlyLabel(String ext) {
+        if (ext == null) return null;
+        ext = ext.toLowerCase(java.util.Locale.ROOT);
+        switch (ext) {
+            case "udf": return "UDF Belgesi (.udf)";
+            case "rtf": return "Word / RTF (.rtf)";
+            case "pdf": return "PDF (.pdf)";
+            case "xml": return "XML (.xml)";
+            case "usf": return "USF (.usf)";
+            default: return null;
+        }
+    }
+
+    /** Format penceresi combobox öğesi: görünür etiket + arkadaki filtre + uzantı. */
+    private static final class FormatItem {
+        final String label;
+        final FileFilter filter;
+        final String ext;
+        FormatItem(String label, FileFilter filter, String ext) {
+            this.label = label;
+            this.filter = filter;
+            this.ext = ext;
+        }
+        @Override public String toString() { return label; }
+    }
+
+    /**
+     * Native panel açılmadan önce format seçtiren modal pencere.
+     * filters: accept-all olmayan choosable filtreler (>=2). current: o an seçili filtre.
+     * currentFileName: ön-doldurulan ad (varsayılan seçimi belgenin uzantısına çekmek için).
+     * Dönüş: seçilen FileFilter; İptal/kapatma → null (kaydetme iptal).
+     */
+    private static FileFilter promptFormat(Window owner, java.util.List<FileFilter> filters,
+                                           FileFilter current, String currentFileName) {
+        FormatItem[] items = new FormatItem[filters.size()];
+        int defaultIdx = 0;
+        for (int i = 0; i < filters.size(); i++) {
+            FileFilter ff = filters.get(i);
+            String ext = probeExtension(ff);
+            String label = friendlyLabel(ext);
+            if (label == null) {
+                String desc = ff.getDescription();
+                label = (desc != null && !desc.isEmpty()) ? desc : "Bilinmeyen";
+            }
+            items[i] = new FormatItem(label, ff, ext);
+            if (current != null && ff.equals(current)) defaultIdx = i;
+        }
+        // Belgenin mevcut uzantısına uyan formatı, seçili filtreye tercih et.
+        String curExt = knownExtOf(currentFileName);
+        if (curExt != null) {
+            for (int i = 0; i < items.length; i++) {
+                if (curExt.equals(items[i].ext)) { defaultIdx = i; break; }
+            }
+        }
+        javax.swing.JComboBox<FormatItem> combo = new javax.swing.JComboBox<FormatItem>(items);
+        combo.setSelectedIndex(defaultIdx);
+        int res = javax.swing.JOptionPane.showOptionDialog(
+            owner, combo, "Kaydetme Biçimi",
+            javax.swing.JOptionPane.OK_CANCEL_OPTION, javax.swing.JOptionPane.PLAIN_MESSAGE,
+            null, new Object[]{"Tamam", "İptal"}, "Tamam");
+        // options verildiğinde dönüş = seçilen seçeneğin indeksi (0=Tamam) veya CLOSED_OPTION(-1).
+        if (res != 0) return null;
+        FormatItem sel = (FormatItem) combo.getSelectedItem();
+        return (sel != null) ? sel.filter : null;
+    }
+
     private static void log(String m) {
         if (!"1".equals(System.getProperty("macosfiledialog.debug"))) return;
         try (PrintStream p = new PrintStream(new FileOutputStream("/tmp/macos-filedialog.log", true), true, "UTF-8")) {
@@ -125,6 +232,36 @@ public final class MacFileDialog {
                 if (docName != null && !docName.isEmpty()) fd.setFile(docName);
             }
 
+            // SAVE: native panelde format dropdown'ı yok. 2+ filtre varsa önce
+            // format seçtir; tek filtre varsa sessizce uzantıyı belirle. Hedef
+            // uzantı hem ön-doldurulan ada hem dönen ada (aşağıda) zorlanır.
+            String targetExt = null;
+            FileFilter chosenFilter = null;  // native panel onaylanınca fc'ye yazılır (iptalde değil)
+            if (mode == FileDialog.SAVE) {
+                java.util.List<FileFilter> real = new java.util.ArrayList<FileFilter>();
+                FileFilter acceptAll = fc.getAcceptAllFileFilter();
+                FileFilter[] choosable = fc.getChoosableFileFilters();
+                if (choosable != null) {
+                    for (FileFilter ff : choosable) {
+                        if (ff != null && !ff.equals(acceptAll)) real.add(ff);
+                    }
+                }
+                if (real.size() >= 2) {
+                    chosenFilter = promptFormat(owner, real, fc.getFileFilter(), fd.getFile());
+                    if (chosenFilter == null) {
+                        log("format penceresi iptal (mode=SAVE)");
+                        return JFileChooser.CANCEL_OPTION;
+                    }
+                    targetExt = probeExtension(chosenFilter);
+                } else if (real.size() == 1) {
+                    targetExt = probeExtension(real.get(0));
+                }
+                if (targetExt != null) {
+                    String pre = fd.getFile();
+                    if (pre != null && !pre.isEmpty()) fd.setFile(forceExtension(pre, targetExt));
+                }
+            }
+
             if (fc.isMultiSelectionEnabled()) fd.setMultipleMode(true);
 
             // Dizin seçimi (savunmacı; UDE'de görülmedi)
@@ -155,6 +292,11 @@ public final class MacFileDialog {
             if (name == null) {
                 log("iptal (mode=" + mode + ")");
                 return JFileChooser.CANCEL_OPTION;
+            }
+            if (mode == FileDialog.SAVE) {
+                // fc'yi yalnız native panel onaylandıktan SONRA değiştir; iptalde fc bozulmasın.
+                if (chosenFilter != null) fc.setFileFilter(chosenFilter);
+                if (targetExt != null) name = forceExtension(name, targetExt);
             }
             d = fd.getDirectory();
             multi = fd.getFiles();
