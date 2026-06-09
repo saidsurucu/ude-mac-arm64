@@ -7,13 +7,11 @@ import java.awt.Frame;
 import java.awt.Window;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.PrintStream;
 
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileFilter;
-import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
  * macOS native dosya pencereleri köprüsü. UDE'nin JFileChooser.show* çağrıları
@@ -48,6 +46,58 @@ public final class MacFileDialog {
         return show(fc, parent, mode);
     }
 
+    /**
+     * Seçilen dosyayı kabul eden ilk accept-all-olmayan choosable filtreyi döndürür;
+     * yoksa null. Native panelde filtre açılır listesi olmadığından, seçimden sonra
+     * UDE'nin fc.getFileFilter()'ının doğru ayrıştırıcıya işaret etmesini sağlamak için.
+     */
+    static FileFilter matchChoosableFilter(JFileChooser fc, File f) {
+        if (fc == null || f == null) return null;
+        FileFilter acceptAll = fc.getAcceptAllFileFilter();
+        FileFilter[] all = fc.getChoosableFileFilters();
+        if (all == null) return null;
+        for (FileFilter ff : all) {
+            if (ff == null || ff.equals(acceptAll)) continue;
+            if (ff.accept(f)) return ff;
+        }
+        return null;
+    }
+
+    /**
+     * Pencere başlığından açık belgenin dosya adını çıkarır; yoksa null.
+     * Başlık biçimi: "Doküman Editörü vX (*) - isimsiz.UDF (/Users/.../isimsiz.UDF)".
+     * Önce son parantez içindeki tam yolun taban adı denenir (en güvenilir);
+     * yedek olarak " - " sonrası, " (" öncesi metin alınır.
+     */
+    private static String docNameFromTitle(Window owner) {
+        try {
+            String t = (owner instanceof Frame) ? ((Frame) owner).getTitle() : null;
+            if (t == null) return null;
+            t = t.trim();
+            if (t.isEmpty()) return null;
+            int close = t.lastIndexOf(')');
+            int open = (close > 0) ? t.lastIndexOf('(', close) : -1;
+            if (open >= 0 && close > open) {
+                String inside = t.substring(open + 1, close).trim();
+                if (inside.indexOf('/') >= 0 || inside.indexOf('\\') >= 0) {
+                    int slash = Math.max(inside.lastIndexOf('/'), inside.lastIndexOf('\\'));
+                    String base = inside.substring(slash + 1).trim();
+                    if (!base.isEmpty()) return base;
+                }
+            }
+            int dash = t.indexOf(" - ");
+            if (dash >= 0) {
+                String after = t.substring(dash + 3).trim();
+                int paren = after.indexOf(" (");
+                if (paren > 0) after = after.substring(0, paren).trim();
+                if (!after.isEmpty()) return after;
+            }
+            return null;
+        } catch (Throwable x) {
+            return null;
+        }
+    }
+
     private static int show(JFileChooser fc, Component parent, int mode) {
         try {
             Window owner = (parent instanceof Window) ? (Window) parent
@@ -65,7 +115,15 @@ public final class MacFileDialog {
             if (dir != null) fd.setDirectory(dir.getAbsolutePath());
 
             File sel = fc.getSelectedFile();
-            if (sel != null) fd.setFile(sel.getName());
+            if (sel != null && sel.getName() != null && !sel.getName().isEmpty()) {
+                fd.setFile(sel.getName());
+            } else if (mode == FileDialog.SAVE) {
+                // "Farklı Kaydet"/"PDF olarak kaydet": UDE varsayılan isim vermez (sel=null).
+                // Açık belgenin adını pencere başlığından al (ör. "isimsiz.UDF").
+                // Başlık biçimi: "Doküman Editörü vX (*) - <ad> (<tam yol>)".
+                String docName = docNameFromTitle(owner);
+                if (docName != null && !docName.isEmpty()) fd.setFile(docName);
+            }
 
             if (fc.isMultiSelectionEnabled()) fd.setMultipleMode(true);
 
@@ -81,23 +139,10 @@ public final class MacFileDialog {
             String d;
             File[] multi;
             try {
-                // Filtre koruma (en iyi çaba): FileNameExtensionFilter için setFile("*.ext")
-            // glob ipucu + setFilenameFilter yedeği. UYARI: modern macOS NSOpenPanel/
-            // NSSavePanel her ikisini de JDK/OS sürümüne göre yok sayabilir (UTI tabanlı
-            // allowedContentTypes java.awt.FileDialog'dan ayarlanamaz) → süzme bazı
-            // sürümlerde etkisiz olabilir; native pencere tüm dosyaları gösterir.
-                final FileFilter ff = fc.getFileFilter();
-                boolean acceptAll = (ff == null) || ff.equals(fc.getAcceptAllFileFilter());
-                if (!acceptAll) {
-                    if (mode == FileDialog.LOAD && sel == null && ff instanceof FileNameExtensionFilter) {
-                        String[] exts = ((FileNameExtensionFilter) ff).getExtensions();
-                        if (exts != null && exts.length > 0) fd.setFile("*." + exts[0]);
-                    }
-                    fd.setFilenameFilter(new FilenameFilter() {
-                        public boolean accept(File dd, String n) { return ff.accept(new File(dd, n)); }
-                    });
-                }
-
+                // Katı dosya filtresi UYGULANMAZ: macOS NSOpenPanel filtreyi onurlandırdığında
+                // .udf dışı dosyalar (rtf/xml/usf) gizleniyordu; NSSavePanel'de FilenameFilter
+                // isim alanını bozuyordu. Format/uzantı mantığı UDE'nin kendi JFileChooser
+                // durumunda kalır; LOAD'da seçim sonrası eşleşen filtre ayarlanır (aşağıda).
                 fd.setVisible(true);
             } finally {
                 if (dirMode) {
@@ -113,13 +158,20 @@ public final class MacFileDialog {
             }
             d = fd.getDirectory();
             multi = fd.getFiles();
+            File chosen;
             if (fc.isMultiSelectionEnabled() && multi != null && multi.length > 0) {
                 fc.setSelectedFiles(multi);
                 fc.setSelectedFile(multi[0]);
+                chosen = multi[0];
             } else {
-                fc.setSelectedFile(new File(d, name));
+                chosen = new File(d, name);
+                fc.setSelectedFile(chosen);
             }
             if (d != null) fc.setCurrentDirectory(new File(d));
+            if (mode == FileDialog.LOAD) {
+                FileFilter mf = matchChoosableFilter(fc, chosen);
+                if (mf != null) fc.setFileFilter(mf);
+            }
             log("seçildi: " + d + name);
             return JFileChooser.APPROVE_OPTION;
         } catch (Throwable t) {
