@@ -236,6 +236,7 @@ public final class MacFileDialog {
             // format seçtir; tek filtre varsa sessizce uzantıyı belirle. Hedef
             // uzantı hem ön-doldurulan ada hem dönen ada (aşağıda) zorlanır.
             String targetExt = null;
+            FileFilter chosenFilter = null;  // native panel onaylanınca fc'ye yazılır (iptalde değil)
             if (mode == FileDialog.SAVE) {
                 java.util.List<FileFilter> real = new java.util.ArrayList<FileFilter>();
                 FileFilter acceptAll = fc.getAcceptAllFileFilter();
@@ -246,13 +247,12 @@ public final class MacFileDialog {
                     }
                 }
                 if (real.size() >= 2) {
-                    FileFilter chosen = promptFormat(owner, real, fc.getFileFilter(), fd.getFile());
-                    if (chosen == null) {
+                    chosenFilter = promptFormat(owner, real, fc.getFileFilter(), fd.getFile());
+                    if (chosenFilter == null) {
                         log("format penceresi iptal (mode=SAVE)");
                         return JFileChooser.CANCEL_OPTION;
                     }
-                    fc.setFileFilter(chosen);
-                    targetExt = probeExtension(chosen);
+                    targetExt = probeExtension(chosenFilter);
                 } else if (real.size() == 1) {
                     targetExt = probeExtension(real.get(0));
                 }
@@ -293,8 +293,10 @@ public final class MacFileDialog {
                 log("iptal (mode=" + mode + ")");
                 return JFileChooser.CANCEL_OPTION;
             }
-            if (mode == FileDialog.SAVE && targetExt != null) {
-                name = forceExtension(name, targetExt);
+            if (mode == FileDialog.SAVE) {
+                // fc'yi yalnız native panel onaylandıktan SONRA değiştir; iptalde fc bozulmasın.
+                if (chosenFilter != null) fc.setFileFilter(chosenFilter);
+                if (targetExt != null) name = forceExtension(name, targetExt);
             }
             d = fd.getDirectory();
             multi = fd.getFiles();
