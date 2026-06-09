@@ -53,6 +53,20 @@ public class MacFileDialogFilterTest {
               MacFileDialog.forceExtension("belge.xml", "xml").equals("belge.xml"));
         check("forceExtension bilinmeyen uzanti korunur",
               MacFileDialog.forceExtension("belge.docx", "udf").equals("belge.docx.udf"));
+        check("forceExtension null ad null doner",
+              MacFileDialog.forceExtension(null, "udf") == null);
+        check("forceExtension null ext degismez",
+              MacFileDialog.forceExtension("belge.udf", null).equals("belge.udf"));
+        check("forceExtension bos ext degismez",
+              MacFileDialog.forceExtension("belge.udf", "").equals("belge.udf"));
+        check("knownExtOf null null",
+              MacFileDialog.knownExtOf(null) == null);
+        check("knownExtOf udf taniyor",
+              "udf".equals(MacFileDialog.knownExtOf("belge.udf")));
+        check("knownExtOf docx null",
+              MacFileDialog.knownExtOf("belge.docx") == null);
+        check("knownExtOf sonda nokta null",
+              MacFileDialog.knownExtOf("belge.") == null);
 
         if (failures > 0) { System.out.println(failures + " test BASARISIZ"); System.exit(1); }
         System.out.println("Tum testler GECTI");
