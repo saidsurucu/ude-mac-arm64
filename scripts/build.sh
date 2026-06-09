@@ -34,10 +34,12 @@ TEXTKEYS_SRC="$SCRIPT_DIR/macos-textkeys"
 ZOOM_SRC="$SCRIPT_DIR/macos-zoom"
 FOP_SRC="$SCRIPT_DIR/macos-fop"
 FD_SRC="$SCRIPT_DIR/macos-filedialog"   # native macOS dosya pencereleri yaması
+IMG_SRC="$SCRIPT_DIR/macos-imagefull"   # satır-içi imaj tam-çözünürlük (bulanıklık) yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
 FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencereleri) | 0=kapalı
+IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük (bulanıklık) yaması
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -362,6 +364,23 @@ apply_filedialog() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[filedialog] native dosya pencereleri yaması uygulandı."
 }
 
+apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$IMGFULL" = "1" ] || return 0
+	c_info "[imagefull] satır-içi imaj tam-çözünürlük yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[imagefull] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[imagefull] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ikon/fop/filedialog yamasıyla ortak)
+	rm -rf "$BUILD/_imgpatch"; mkdir -p "$BUILD/_imgpatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_imgpatch" "$IMG_SRC/ImageInsertPatch.java" \
+		|| { c_warn "[imagefull] ImageInsertPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_imgpatch:$jvs" ImageInsertPatch "$JAR" "$BUILD/_imgpatch/out" \
+		|| die "[imagefull] çekirdek yama uygulanamadı (UDE sürümü değişmiş olabilir)."
+	( cd "$BUILD/_imgpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[imagefull] tam-çözünürlük yaması uygulandı."
+}
+
 patch_jar() {
 	local JAR="$SRC_APP_DIR/app/Contents/Java/editor-app.jar"
 	[ -s "$JAR" ] || die "Önce 'download' çalıştır."
@@ -378,6 +397,7 @@ patch_jar() {
 	apply_icons "$JAR"
 	apply_fop_fonts "$JAR"
 	apply_filedialog "$JAR"
+	apply_imagefull "$JAR"
 	unzip -l "$JAR" | grep 'Mac/aarch64/libsqlitejdbc.dylib' >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
 	c_ok "jar yamalandı (sqlite 3.46 + eawt çıkarıldı)"
@@ -529,6 +549,7 @@ case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
 	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; patch) patch_jar ;;
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	package) package ;; sign) sign ;; dmg) dmg ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
 	*) die "Bilinmeyen hedef: $1  (scripts/build.sh help)" ;;
