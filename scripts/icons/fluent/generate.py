@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Fluent ikon üretici (UDE mac-arm).
+
+mapping.tsv satırlarından scripts/icons/overrides/resources/ altına
+native + @2x PNG üretir. Kullanım:
+  generate.py                # mapping'deki tüm (KEEP olmayan) ikonlar
+  generate.py bold italic    # yalnız adı verilenler
+  generate.py --check        # fluent adlarının CDN'de varlığını doğrula
+  generate.py --dump <fluent_adı>  # alt-yol (subpath) parçalarını listele
+
+mapping.tsv formatı (TAB ayraçlı, '#' yorum):
+  resource<TAB>WxH|auto<TAB>fluent_adı|KEEP|compose:<ad><TAB>renk_kuralı
+renk kuralı: all=#hex | body=#hex[;sub:N=#hex]... [;extra:<path-d>=#hex]
+  sub:N  -> tüm <path> d'leri büyük-M sınırlarından bölündükten sonraki N. parça
+  extra  -> verilen path d'si verilen renkle EN ALTA (zemine) eklenir
+"""
+import re
+import struct
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+OVERRIDES = HERE.parent / "overrides" / "resources"
+CACHE = HERE / "cache"
+MAPPING = HERE / "mapping.tsv"
+CDN = "https://cdn.jsdelivr.net/npm/@fluentui/svg-icons/icons/{}.svg"
+SKIP_2X = {"search"}  # CLAUDE.md: search@2x tam pikselde çizilip kırpılıyor
+
+
+def png_size(path: Path):
+    with open(path, "rb") as f:
+        head = f.read(24)
+    if head[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"PNG değil: {path}")
+    w, h = struct.unpack(">II", head[16:24])
+    return w, h
+
+
+def fetch(fluent_name: str) -> str:
+    CACHE.mkdir(exist_ok=True)
+    p = CACHE / (fluent_name + ".svg")
+    if not p.exists():
+        with urllib.request.urlopen(CDN.format(fluent_name), timeout=30) as r:
+            p.write_bytes(r.read())
+    return p.read_text()
+
+
+def paths_of(svg: str):
+    return re.findall(r'<path[^>]*\bd="([^"]+)"', svg)
+
+
+def subpath_chunks(svg: str):
+    """Tüm path d'lerini büyük-M sınırlarından parçalara böl (sıralı, düz liste).
+    Küçük-m ile süren alt-yollar önceki parçaya yapışık kalır (koordinat güvenliği)."""
+    chunks = []
+    for d in paths_of(svg):
+        parts = [p for p in re.split(r"(?=M)", d) if p.strip()]
+        chunks.extend(parts)
+    return chunks
+
+
+def parse_rule(rule: str):
+    body, subs, extras = "#444444", {}, []
+    for part in rule.split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        k, _, v = part.partition("=")
+        if k == "all" or k == "body":
+            body = v
+        elif k.startswith("sub:"):
+            subs[int(k[4:])] = v
+        elif k.startswith("extra:"):
+            extras.append((k[6:], v))
+        else:
+            raise ValueError(f"bilinmeyen kural: {part}")
+    return body, subs, extras
+
+
+def recolor(svg: str, rule: str) -> str:
+    """24x24 fluent SVG'yi kurala göre çok-path'li renkli SVG'ye çevirir."""
+    body, subs, extras = parse_rule(rule)
+    chunks = subpath_chunks(svg)
+    paths = []
+    for d, color in extras:  # zemine
+        paths.append(f'<path fill="{color}" d="{d}"/>')
+    for i, d in enumerate(chunks):
+        paths.append(f'<path fill="{subs.get(i, body)}" d="{d}"/>')
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            + "".join(paths) + "</svg>")
+
+
+def wrap_center(inner_svg: str, W: int, H: int) -> str:
+    """Kare glyph'i WxH tuvale orantı bozmadan ortalar."""
+    side = min(W, H)
+    x, y = (W - side) // 2, (H - side) // 2
+    inner = inner_svg.replace("<svg ", f'<svg x="{x}" y="{y}" width="{side}" height="{side}" ', 1)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+            f'viewBox="0 0 {W} {H}">{inner}</svg>')
+
+
+def render(svg: str, W: int, H: int, out: Path):
+    subprocess.run(["rsvg-convert", "-w", str(W), "-h", str(H), "-o", str(out)],
+                   input=svg.encode(), check=True)
+
+
+# ---- elle kompozisyonlar: ad -> f(rule) -> tam SVG (viewBox hedef orana uygun) ----
+def compose_search(rule: str) -> str:
+    """search.png: 24x24 tuval, ~10px glyph +7+7 (görünür pencere satır 6-17)."""
+    glyph = recolor(fetch("search_24_regular"), rule)
+    inner = glyph.replace("<svg ", '<svg x="7" y="7" width="10" height="10" ', 1)
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
+            f'viewBox="0 0 24 24">{inner}</svg>')
+
+
+COMPOSE = {
+    "search": compose_search,
+}
+
+
+def load_mapping():
+    rows = []
+    for ln in MAPPING.read_text().splitlines():
+        ln = ln.rstrip()
+        if not ln or ln.startswith("#"):
+            continue
+        cols = ln.split("\t")
+        if len(cols) != 4:
+            raise ValueError(f"4 sütun bekleniyor: {ln!r}")
+        rows.append(cols)
+    return rows
+
+
+def main():
+    args = sys.argv[1:]
+    if args[:1] == ["--dump"]:
+        for i, c in enumerate(subpath_chunks(fetch(args[1]))):
+            print(f"sub:{i}  {c[:70]}")
+        return
+    rows = load_mapping()
+    if args[:1] == ["--check"]:
+        bad = 0
+        names = {r[2] for r in rows if r[2] not in ("KEEP",) and not r[2].startswith("compose:")}
+        for n in sorted(names):
+            try:
+                fetch(n)
+            except Exception as e:
+                print(f"YOK: {n} ({e})")
+                bad += 1
+        print(f"{len(names)} ad, {bad} eksik")
+        sys.exit(1 if bad else 0)
+    only = set(args)
+    made = 0
+    for res, size, src, rule in rows:
+        if src == "KEEP" or (only and res not in only):
+            continue
+        if size == "auto":
+            W, H = png_size(OVERRIDES / f"{res}.png")
+        else:
+            W, H = (int(v) for v in size.lower().split("x"))
+        if src.startswith("compose:"):
+            svg = COMPOSE[src[8:]](rule)
+        elif res in COMPOSE:
+            svg = COMPOSE[res](rule)
+        else:
+            svg = recolor(fetch(src), rule)
+            if W != H:
+                svg = wrap_center(svg, W, H)
+        render(svg, W, H, OVERRIDES / f"{res}.png")
+        if res not in SKIP_2X:
+            render(svg, W * 2, H * 2, OVERRIDES / f"{res}@2x.png")
+        elif (OVERRIDES / f"{res}@2x.png").exists():
+            (OVERRIDES / f"{res}@2x.png").unlink()
+        made += 1
+    print(f"{made} ikon üretildi -> {OVERRIDES}")
+
+
+if __name__ == "__main__":
+    main()

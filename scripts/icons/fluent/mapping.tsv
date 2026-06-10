@@ -1,0 +1,5 @@
+# resource	boyut	fluent_adı|KEEP|compose:<ad>	renk_kuralı
+# Palet: gri #444444  kırmızı #D13438  yeşil #107C41  mavi #2B7CD3  altın #D9A21B
+# KEEP: orijinal/özel kalır (stil önizlemeleri, logo, orb görselleri)
+ude	auto	KEEP	-
+ude_ki	auto	KEEP	-
