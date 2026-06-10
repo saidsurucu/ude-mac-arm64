@@ -62,6 +62,7 @@ public final class MacLook {
                         try { unifyTitleBar(f); } catch (Throwable t) { log("titlebar: " + t); }
                         try { removeMemoryBar(f); } catch (Throwable t) { log("membar: " + t); }
                         try { fixRulerBackground(f); } catch (Throwable t) { log("ruler: " + t); }
+                        try { boldTaskTabs(f); } catch (Throwable t) { log("tabfont: " + t); }
                     });
                 }
             }, AWTEvent.WINDOW_EVENT_MASK);
@@ -126,6 +127,21 @@ public final class MacLook {
         }
         if (c instanceof Container) {
             for (Component k : ((Container) c).getComponents()) fixRulerWalk(k);
+        }
+    }
+
+    /** Şerit sekme başlıkları Word'deki gibi kalın. Font bileşen üzerinde
+     *  türetilir ki tercih edilen genişlik de kalın ölçüyle hesaplansın. */
+    private static void boldTaskTabs(Component c) {
+        if (c.getClass().getSimpleName().equals("JRibbonTaskToggleButton")) {
+            java.awt.Font fo = c.getFont();
+            if (fo != null && !fo.isBold()) {
+                c.setFont(fo.deriveFont(java.awt.Font.BOLD));
+                log("sekme kalınlaştı: " + c);
+            }
+        }
+        if (c instanceof Container) {
+            for (Component k : ((Container) c).getComponents()) boldTaskTabs(k);
         }
     }
 
