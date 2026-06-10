@@ -34,9 +34,11 @@ public class ImageResizePatch {
 
         CtClass hj = pool.get(HJ);
 
+        // --- 1) fare olay yakalama (KRİTİK — başarısızsa die) ---
         guardEventMethod(pool, hj, "processMouseEvent");
         guardEventMethod(pool, hj, "processMouseMotionEvent");
 
+        // --- 2) paint overlay (KRİTİK — tutamaçsız özellik anlamsız) ---
         CtMethod paint = hj.getDeclaredMethod("paint",
                 new CtClass[]{pool.get("java.awt.Graphics")});
         paint.insertAfter(CTRL + ".paintOverlay(this, $1);");
