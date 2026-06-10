@@ -33,7 +33,11 @@ public class SkinPatch {
             "{ if (!macosskin.FlatUdeSkin.installing) {"
           + "    macosskin.FlatUdeSkin.installing = true;"
           + "    try {"
-          + "      boolean __ok = org.jvnet.substance.SubstanceLookAndFeel.setSkin(new macosskin.FlatUdeSkin());"
+          + "      org.jvnet.substance.api.SubstanceSkin __skin ="
+          + "        macosskin.DarkMode.isDark()"
+          + "          ? (org.jvnet.substance.api.SubstanceSkin) new macosskin.FlatUdeDarkSkin()"
+          + "          : (org.jvnet.substance.api.SubstanceSkin) new macosskin.FlatUdeSkin();"
+          + "      boolean __ok = org.jvnet.substance.SubstanceLookAndFeel.setSkin(__skin);"
           + "      try {"
           + "        org.jvnet.substance.fonts.FontSet __base ="
           + "          org.jvnet.substance.SubstanceLookAndFeel.getFontPolicy().getFontSet(\"Substance\", null);"
@@ -48,11 +52,12 @@ public class SkinPatch {
         System.out.println("[SkinPatch] setSkin(String) -> FlatUdeSkin sarması uygulandı.");
 
         // Editor masaüstü arka planı: wp.p.E = teal(44,153,174) static sabiti.
-        // clinit sonrasi nötr gri ile override (alan public static, final değil).
+        // clinit sonrası DarkMode kanvas rengiyle override (açık: nötr gri,
+        // koyu: koyu gri; alan public static, final değil).
         try {
             CtClass wpP = pool.get("tr.com.havelsan.uyap.system.swing.wp.p");
             wpP.makeClassInitializer().insertAfter(
-                "E = new java.awt.Color(228, 231, 235);");
+                "E = macosskin.DarkMode.canvasColor();");
             writeClass(wpP, outDir);
             System.out.println("[SkinPatch] wp.p.E teal -> nötr gri yaması uygulandı.");
         } catch (Throwable t) {
@@ -61,7 +66,8 @@ public class SkinPatch {
 
         // Tercihlerden (tercihler.xml) yüklenen eski teal degerini de nötrle:
         // an sinifi pref'i okuyup E alanina putstatic yapar ve clinit varsayilanini ezer.
-        // Yalniz eski teal (-13854290) remap edilir; kullanicinin sectigi baska renkler dokunulmaz.
+        // Yalniz eski teal (-13854290) ve bizim acik-gri kalici degerimiz (-1775637)
+        // remap edilir; kullanicinin sectigi baska renkler dokunulmaz.
         try {
             CtClass an = pool.get("tr.com.havelsan.uyap.system.editor.common.an");
             an.instrument(new ExprEditor() {
@@ -72,8 +78,8 @@ public class SkinPatch {
                                     f.getField().getDeclaringClass().getName())) {
                             f.replace(
                                 "{ java.awt.Color __v = $1;"
-                              + "  if (__v != null && __v.getRGB() == -13854290) {"
-                              + "    __v = new java.awt.Color(228, 231, 235);"
+                              + "  if (__v != null && (__v.getRGB() == -13854290 || __v.getRGB() == -1775637)) {"
+                              + "    __v = macosskin.DarkMode.canvasColor();"
                               + "  }"
                               + "  $proceed(__v); }");
                         }
