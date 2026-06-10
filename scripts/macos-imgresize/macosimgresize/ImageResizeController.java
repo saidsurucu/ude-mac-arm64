@@ -57,13 +57,24 @@ public final class ImageResizeController {
             Class<?> t = Class.forName("tr.com.havelsan.uyap.system.swing.wp.model.T");
             mSetWidth = t.getMethod("d", MutableAttributeSet.class, float.class);
             mSetHeight = t.getMethod("g", MutableAttributeSet.class, float.class);
-            mGetWidth = t.getMethod("c", AttributeSet.class);
-            mGetHeight = t.getMethod("f", AttributeSet.class);
+            mGetWidth = staticMethod(t, "c", float.class, AttributeSet.class);
+            mGetHeight = staticMethod(t, "f", float.class, AttributeSet.class);
             reflectionOk = true;
         } catch (Throwable ex) {
             reflectionOk = false;
             log("yansıma kurulamadı, özellik kapalı: " + ex);
         }
+    }
+
+    /** İsim + parametre + dönüş tipi eşleyen statik metot (dönüş-tipi aşırı yüklemeleri için). */
+    private static Method staticMethod(Class<?> owner, String name, Class<?> ret, Class<?>... params) throws NoSuchMethodException {
+        for (Method m : owner.getMethods()) {
+            if (m.getName().equals(name) && m.getReturnType() == ret
+                    && java.util.Arrays.equals(m.getParameterTypes(), params)) {
+                return m;
+            }
+        }
+        throw new NoSuchMethodException(owner.getName() + "." + name + " -> " + ret.getName());
     }
 
     private ImageResizeController() {}
@@ -73,6 +84,7 @@ public final class ImageResizeController {
         Element selected;          // seçili imaj elementi (belge değişiminde sıfırlanır)
         boolean listenersInstalled;
         boolean cursorOverridden;
+        javax.swing.text.Document doc;  // listener'ların takılı olduğu belge
         // sürükleme durumu:
         int handle = -1;           // 0=NW 1=NE 2=SW 3=SE
         boolean swallowNextClick;  // onReleased sonrası gelen CLICKED olayını yut
@@ -142,6 +154,7 @@ public final class ImageResizeController {
     // ---- olay işleyiciler -----------------------------------------------------
 
     private static boolean onPressed(JTextComponent c, State s, MouseEvent e) {
+        s.swallowNextClick = false;
         if (e.getButton() != MouseEvent.BUTTON1 || e.isPopupTrigger()) return false;
         // 1) tutamaç üzerinde mi? -> sürükleme başlat, olayı tüket (caret oynamasın)
         if (s.selected != null) {
@@ -231,18 +244,22 @@ public final class ImageResizeController {
         return s;
     }
 
-    /** Belge yapısı değişince / odak kaybında seçimi bırak (bileşen başına 1 kez). */
+    /** Belge yapısı değişince / odak kaybında seçimi bırak; belge swap'ında yeniden kur. */
     private static void installListeners(final JTextComponent c, final State s) {
+        javax.swing.text.Document d = c.getDocument();
+        if (s.doc != d) {
+            s.doc = d;
+            d.addDocumentListener(new DocumentListener() {
+                public void insertUpdate(DocumentEvent e) { clear(); }
+                public void removeUpdate(DocumentEvent e) { clear(); }
+                public void changedUpdate(DocumentEvent e) { c.repaint(); } // attribute değişimi: seçim kalsın
+                private void clear() {
+                    if (s.selected != null) { s.selected = null; s.handle = -1; c.repaint(); }
+                }
+            });
+        }
         if (s.listenersInstalled) return;
         s.listenersInstalled = true;
-        c.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { clear(); }
-            public void removeUpdate(DocumentEvent e) { clear(); }
-            public void changedUpdate(DocumentEvent e) { c.repaint(); } // attribute değişimi: seçim kalsın
-            private void clear() {
-                if (s.selected != null) { s.selected = null; s.handle = -1; c.repaint(); }
-            }
-        });
         c.addFocusListener(new FocusAdapter() {
             public void focusLost(FocusEvent e) {
                 if (s.selected != null) { s.selected = null; s.handle = -1; c.repaint(); }
@@ -346,7 +363,7 @@ public final class ImageResizeController {
     private static float getFloat(Method getter, AttributeSet attrs) {
         try {
             Object v = getter.invoke(null, attrs);
-            return (v instanceof Float) ? ((Float) v).floatValue() : Float.NEGATIVE_INFINITY;
+            return (v instanceof Number) ? ((Number) v).floatValue() : Float.NEGATIVE_INFINITY;
         } catch (Throwable ex) {
             return Float.NEGATIVE_INFINITY;
         }
