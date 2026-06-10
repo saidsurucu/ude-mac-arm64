@@ -75,6 +75,7 @@ public final class ImageResizeController {
         boolean cursorOverridden;
         // sürükleme durumu:
         int handle = -1;           // 0=NW 1=NE 2=SW 3=SE
+        boolean swallowNextClick;  // onReleased sonrası gelen CLICKED olayını yut
         Rectangle base;            // sürükleme başındaki görünen sınırlar (px)
         Rectangle preview;         // kesikli çerçeve (px)
         double scale = 1.0;        // önizleme ölçeği (commit'te kullanılır)
@@ -94,7 +95,9 @@ public final class ImageResizeController {
                 case MouseEvent.MOUSE_DRAGGED:  return onDragged(c, s, e);
                 case MouseEvent.MOUSE_RELEASED: return onReleased(c, s, e);
                 case MouseEvent.MOUSE_MOVED:    return onMoved(c, s, e);
-                case MouseEvent.MOUSE_CLICKED:  return s.handle >= 0; // drag bitişindeki click'i yut
+                case MouseEvent.MOUSE_CLICKED:  // drag bitişindeki click'i yut
+                    if (s.swallowNextClick) { s.swallowNextClick = false; return true; }
+                    return false;
                 default: return false;
             }
         } catch (Throwable ex) {
@@ -110,8 +113,9 @@ public final class ImageResizeController {
             JTextComponent c = (JTextComponent) component;
             State s = STATES.get(c);
             if (s == null || s.selected == null || !c.isEditable()) return;
+            if (!elementCurrent(c, s.selected)) { s.selected = null; s.handle = -1; return; }
             Rectangle b = boundsOf(c, s.selected);
-            if (b == null) { s.selected = null; return; }
+            if (b == null) { s.selected = null; s.handle = -1; return; }
             Graphics2D g2 = (Graphics2D) g.create();
             try {
                 // 4 köşe tutamacı: beyaz dolgu + koyu çerçeve
@@ -186,6 +190,7 @@ public final class ImageResizeController {
     private static boolean onReleased(JTextComponent c, State s, MouseEvent e) {
         if (s.handle < 0) return false;
         s.handle = -1;
+        s.swallowNextClick = true;
         boolean hadPreview = s.preview != null;
         s.preview = null;
         if (hadPreview && Math.abs(s.scale - 1.0) > 0.005 && s.selected != null) {
@@ -214,6 +219,11 @@ public final class ImageResizeController {
     }
 
     // ---- yardımcılar ----------------------------------------------------------
+
+    /** Seçili element hâlâ bileşenin GÜNCEL belgesine mi ait? (setDocument swap guard'ı) */
+    private static boolean elementCurrent(JTextComponent c, Element el) {
+        return el != null && el.getDocument() == c.getDocument();
+    }
 
     private static State state(JTextComponent c) {
         State s = STATES.get(c);
@@ -265,9 +275,9 @@ public final class ImageResizeController {
 
     /**
      * İmajın görünen sınırları (bileşen koordinatı, px).
-     * Birincil strateji: modelToView(start)/(end) dikdörtgenleri. end farklı
-     * satıra taşarsa start dikdörtgeninin yüksekliğinden kare varsayımıyla değil,
-     * width/height attribute'larından genişlik türetilir; o da yoksa null
+     * Birincil strateji: modelToView(start)/(end) dikdörtgenleri (end aynı görsel
+     * satırdaysa — tolerant kontrol). end sonraki satıra sarmışsa width/height
+     * attribute'larından genişlik türetilir; o da yoksa null
      * (tutamaç gösterilmez — güvenli geri çekilme).
      */
     private static Rectangle boundsOf(JTextComponent c, Element el) {
@@ -277,7 +287,7 @@ public final class ImageResizeController {
             if (r0 == null || r1 == null) return null;
             int h = r0.height;
             int w;
-            if (r1.y == r0.y) {
+            if (r1.y >= r0.y && r1.y < r0.y + r0.height) {
                 w = r1.x - r0.x;
             } else {
                 float aw = getFloat(mGetWidth, el.getAttributes());
@@ -345,6 +355,7 @@ public final class ImageResizeController {
     /** Yeni width/height attribute'larını tek undo adımıyla uygular (gui.jD yolu). */
     private static void commit(JTextComponent c, Element el, double scale) {
         try {
+            if (!elementCurrent(c, el)) return;
             State s = STATES.get(c);
             double wPt = basePt(s, true) * scale;
             double hPt = basePt(s, false) * scale;
