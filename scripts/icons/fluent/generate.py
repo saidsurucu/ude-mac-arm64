@@ -87,6 +87,8 @@ def recolor(svg: str, rule: str) -> str:
     path'ler olduğu gibi boyanır; sub: varken aynı renkteki ARDIŞIK parçalar
     tek path'te birleştirilir (delikler renk grubu içinde korunur)."""
     body, subs, extras = parse_rule(rule)
+    m = re.search(r'viewBox="([^"]+)"', svg)
+    viewbox = m.group(1) if m else "0 0 24 24"
     paths = []
     for d, color in extras:  # zemine
         paths.append(f'<path fill="{color}" d="{d}"/>')
@@ -104,7 +106,7 @@ def recolor(svg: str, rule: str) -> str:
     else:
         for d in paths_of(svg):
             paths.append(f'<path fill="{body}" d="{d}"/>')
-    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewbox}">'
             + "".join(paths) + "</svg>")
 
 
