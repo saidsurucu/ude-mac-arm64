@@ -44,8 +44,11 @@ public final class DarkMode {
         return isDark() ? new Color(30, 30, 30) : new Color(228, 231, 235);
     }
 
-    /** Teşhis izi (System.err uygulama tarafından yutulur; dosyaya yaz). */
+    /** -Dmacosskin.debug=1 ile teşhis izi (System.err uygulama tarafından yutulur; dosyaya yaz). */
+    private static final boolean DEBUG = "1".equals(System.getProperty("macosskin.debug"));
+
     public static void trace(String m) {
+        if (!DEBUG) return;
         try (java.io.FileWriter w = new java.io.FileWriter("/tmp/skinpatch-trace.log", true)) {
             w.write(System.currentTimeMillis() + " " + m + "\n");
         } catch (Throwable ignore) {

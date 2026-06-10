@@ -54,6 +54,37 @@ public class SkinPatch {
         writeClass(slaf, outDir);
         System.out.println("[SkinPatch] setSkin(String) -> FlatUdeSkin sarması uygulandı.");
 
+        // Açılışta skin GARANTİLİ kurulur. UDE Substance'ı yalnızca
+        // initValues/menuTheme tercihi doluysa kurar (au -> an.a(String) -> setSkin);
+        // tema ayarındaki "standart" seçeneği bu tercihi SİLER ve uygulama kalıcı
+        // olarak Aqua'ya düşer (bizim skin combo'da eşleşmediği için bu kolay
+        // tetiklenir). Bu yüzden tercihten bağımsız olarak, UI başlangıcında
+        // (WPAppManager.main -> invokeLater(new aF(args)), EDT) skin kurulur.
+        // setSkin(SubstanceSkin) LAF Substance değilse UIManager.setLookAndFeel'i
+        // kendisi çağırır (bytecode'dan doğrulandı).
+        CtClass aF = pool.get("tr.com.havelsan.uyap.system.editor.common.aF");
+        aF.getMethod("run", "()V").insertBefore(
+            "{ try {"
+          + "    if (!(javax.swing.UIManager.getLookAndFeel() instanceof org.jvnet.substance.SubstanceLookAndFeel)) {"
+          + "      macosskin.FlatUdeSkin.installing = true;"
+          + "      try {"
+          + "        org.jvnet.substance.api.SubstanceSkin __skin ="
+          + "          macosskin.DarkMode.isDark()"
+          + "            ? (org.jvnet.substance.api.SubstanceSkin) new macosskin.FlatUdeDarkSkin()"
+          + "            : (org.jvnet.substance.api.SubstanceSkin) new macosskin.FlatUdeSkin();"
+          + "        org.jvnet.substance.SubstanceLookAndFeel.setSkin(__skin);"
+          + "        try {"
+          + "          org.jvnet.substance.fonts.FontSet __base ="
+          + "            org.jvnet.substance.SubstanceLookAndFeel.getFontPolicy().getFontSet(\"Substance\", null);"
+          + "          org.jvnet.substance.SubstanceLookAndFeel.setFontPolicy(new macosskin.FlatFontPolicy(__base));"
+          + "        } catch (Throwable __ft) { macosskin.DarkMode.trace(\"acilis font policy: \" + __ft); }"
+          + "        macosskin.DarkMode.trace(\"acilis skin kuruldu dark=\" + macosskin.DarkMode.isDark());"
+          + "      } finally { macosskin.FlatUdeSkin.installing = false; }"
+          + "    }"
+          + "  } catch (Throwable __t) { macosskin.DarkMode.trace(\"acilis skin HATA: \" + __t); } }");
+        writeClass(aF, outDir);
+        System.out.println("[SkinPatch] aF.run() acilis skin kurulumu eklendi.");
+
         // Editor masaüstü arka planı: wp.p.E = teal(44,153,174) static sabiti.
         // clinit sonrası DarkMode kanvas rengiyle override (açık: nötr gri,
         // koyu: koyu gri; alan public static, final değil).
