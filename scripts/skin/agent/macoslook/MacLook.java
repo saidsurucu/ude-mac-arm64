@@ -63,6 +63,7 @@ public final class MacLook {
                         try { removeMemoryBar(f); } catch (Throwable t) { log("membar: " + t); }
                         try { fixRulerBackground(f); } catch (Throwable t) { log("ruler: " + t); }
                         try { boldTaskTabs(f); } catch (Throwable t) { log("tabfont: " + t); }
+                        try { removeScopeCombo(f); } catch (Throwable t) { log("scopecombo: " + t); }
                     });
                 }
             }, AWTEvent.WINDOW_EVENT_MASK);
@@ -143,6 +144,50 @@ public final class MacLook {
         if (c instanceof Container) {
             for (Component k : ((Container) c).getComponents()) boldTaskTabs(k);
         }
+    }
+
+    /** Şeritteki "Geçerli/Gövde" kapsam seçici combo'sunu kaldırır (istek:
+     *  menüde hiç görünmesin). Combo, az öğeli ve "Geçerli" içeren modeliyle
+     *  tanınır; Flamingo sarmalayıcısı (JRibbonComponent) varsa o kaldırılır
+     *  ki band düzeni boşluğu geri kazansın. */
+    private static void removeScopeCombo(JFrame f) {
+        Component ribbon = findByClassName(f, "JRibbon");
+        if (ribbon == null) return;
+        javax.swing.JComboBox<?> combo = findScopeCombo(ribbon);
+        if (combo == null) { log("kapsam combo bulunamadı"); return; }
+        Component victim = combo;
+        Container p = combo.getParent();
+        while (p != null && p.getClass().getSimpleName().equals("JRibbonComponent")) {
+            victim = p;
+            p = p.getParent();
+        }
+        Container parent = victim.getParent();
+        if (parent != null) {
+            parent.remove(victim);
+            parent.revalidate();
+            parent.repaint();
+            log("kapsam combo kaldırıldı: " + victim.getClass().getName());
+        }
+    }
+
+    private static javax.swing.JComboBox<?> findScopeCombo(Component c) {
+        if (c instanceof javax.swing.JComboBox) {
+            javax.swing.JComboBox<?> cb = (javax.swing.JComboBox<?>) c;
+            int n = cb.getItemCount();
+            if (n > 0 && n < 10) {
+                for (int i = 0; i < n; i++) {
+                    if ("Geçerli".equals(String.valueOf(cb.getItemAt(i)))) return cb;
+                }
+            }
+            return null;
+        }
+        if (c instanceof Container) {
+            for (Component k : ((Container) c).getComponents()) {
+                javax.swing.JComboBox<?> hit = findScopeCombo(k);
+                if (hit != null) return hit;
+            }
+        }
+        return null;
     }
 
     private static Component findByClassName(Component c, String simpleName) {
