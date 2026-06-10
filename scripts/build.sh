@@ -269,6 +269,16 @@ zoom() {
 	c_ok "macos-zoom derlendi ($(find "$BUILD/_zoom" -name '*.class' | wc -l | tr -d ' ') sınıf)"
 }
 
+lookagent() {  # SKIN=1 görünüm agent'ı: bütünleşik başlık çubuğu + durum çubuğu temizliği
+	[ "$SKIN" = "1" ] || { c_info "[lookagent] SKIN=0, atlandı."; rm -rf "$BUILD/_lookagent"; return 0; }
+	c_info "macOS görünüm javaagent'ı derleniyor (bütünleşik başlık + WebMemoryBar)…"
+	local jc; jc="$(javac17)" || die "Derleyici (jpackage JDK) yok → scripts/build.sh jpackage-jdk"
+	rm -rf "$BUILD/_lookagent"; mkdir -p "$BUILD/_lookagent"
+	"$jc" --release 11 -d "$BUILD/_lookagent" "$SKIN_SRC/agent/macoslook/MacLook.java" \
+		|| die "macoslook derlenemedi."
+	c_ok "macoslook derlendi."
+}
+
 apply_icons() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$ICONS" = "1" ] || return 0
@@ -496,7 +506,7 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	# 1) FlatUdeSkin'i jar'a karşı derle + enjekte et (patcher'dan ÖNCE)
 	rm -rf "$BUILD/_skinhelper"; mkdir -p "$BUILD/_skinhelper"
 	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_skinhelper" \
-		"$SKIN_SRC/macosskin/DarkMode.java" \
+		"$SKIN_SRC/macosskin/DarkMode.java" "$SKIN_SRC/macosskin/IconDarken.java" \
 		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatUdeDarkSkin.java" \
 		"$SKIN_SRC/macosskin/FlatFontPolicy.java" \
 		|| { c_warn "[skin] skin helper'ları derlenemedi; yama atlandı."; return 0; }
@@ -571,6 +581,15 @@ package() {
 	( cd "$BUILD/_textkeys" && "$(dirname "$jp")/jar" cfm "$in/macos-textkeys.jar" MANIFEST.MF macostextkeys )
 	printf 'Premain-Class: macoszoom.MacZoom\nAgent-Class: macoszoom.MacZoom\n' > "$BUILD/_zoom/MANIFEST.MF"
 	( cd "$BUILD/_zoom" && "$(dirname "$jp")/jar" cfm "$in/macos-zoom.jar" MANIFEST.MF macoszoom )
+	# SKIN=1 görünüm agent'ı (bütünleşik başlık + WebMemoryBar); SKIN=0'da jar üretilmez,
+	# -javaagent satırı da eklenmez (eksik jar'da JVM hiç başlamaz).
+	local lookopts=()
+	if [ -d "$BUILD/_lookagent/macoslook" ]; then
+		printf 'Premain-Class: macoslook.MacLook\nAgent-Class: macoslook.MacLook\n' > "$BUILD/_lookagent/MANIFEST.MF"
+		( cd "$BUILD/_lookagent" && "$(dirname "$jp")/jar" cfm "$in/macos-look.jar" MANIFEST.MF macoslook )
+		lookopts=(--java-options '-javaagent:$APPDIR/macos-look.jar' \
+			--java-options '-Dapple.awt.application.appearance=system')
+	fi
 	local icns; icns="$(ls "$SRC_APP_DIR/app/Contents/Resources/"*.icns 2>/dev/null | head -1)"
 	local ude_ver; ude_ver="$(plutil -extract CFBundleVersion raw "$SRC_APP_DIR/app/Contents/Info.plist" 2>/dev/null || echo 1.0)"
 	local assoc="$BUILD/_udf.properties"
@@ -588,6 +607,7 @@ package() {
 		--java-options '--add-opens=java.desktop/com.apple.eawt=ALL-UNNAMED' \
 		--java-options '-javaagent:$APPDIR/macos-textkeys.jar' \
 		--java-options '-javaagent:$APPDIR/macos-zoom.jar' \
+		${lookopts[@]+"${lookopts[@]}"} \
 		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC' \
 		--java-options -Xms512M --java-options -Xmx4096M \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
@@ -649,7 +669,7 @@ dmg() {
 
 all() {
 	check_deps || die "Ön koşul eksik (jdk / jpackage-jdk)."
-	download; deps; shim; textkeys; zoom; patch_jar; package; sign
+	download; deps; shim; textkeys; zoom; lookagent; patch_jar; package; sign
 	echo
 	c_ok "BİTTİ → $APP"
 	c_info "Çalıştır: open \"$APP\"   |   Kur: /Applications'a sürükle (çift-tık ile .udf açılır, Retina'da keskin)"
@@ -695,7 +715,7 @@ EOF
 
 case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
-	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; patch) patch_jar ;;
+	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; lookagent) lookagent ;; patch) patch_jar ;;
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
