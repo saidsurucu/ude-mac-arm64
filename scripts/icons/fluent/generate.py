@@ -80,14 +80,30 @@ def parse_rule(rule: str):
 
 
 def recolor(svg: str, rule: str) -> str:
-    """24x24 fluent SVG'yi kurala göre çok-path'li renkli SVG'ye çevirir."""
+    """24x24 fluent SVG'yi kurala göre çok-path'li renkli SVG'ye çevirir.
+
+    DİKKAT: alt-yollar ayrı <path>'lere bölününce dolgu kuralı (winding)
+    bozulur, iç delikler som dolguya döner. Bu yüzden sub: kullanılmıyorsa
+    path'ler olduğu gibi boyanır; sub: varken aynı renkteki ARDIŞIK parçalar
+    tek path'te birleştirilir (delikler renk grubu içinde korunur)."""
     body, subs, extras = parse_rule(rule)
-    chunks = subpath_chunks(svg)
     paths = []
     for d, color in extras:  # zemine
         paths.append(f'<path fill="{color}" d="{d}"/>')
-    for i, d in enumerate(chunks):
-        paths.append(f'<path fill="{subs.get(i, body)}" d="{d}"/>')
+    if subs:
+        chunks = subpath_chunks(svg)
+        i = 0
+        while i < len(chunks):
+            color = subs.get(i, body)
+            j = i
+            while j < len(chunks) and subs.get(j, body) == color:
+                j += 1
+            d = "".join(chunks[i:j])
+            paths.append(f'<path fill="{color}" d="{d}"/>')
+            i = j
+    else:
+        for d in paths_of(svg):
+            paths.append(f'<path fill="{body}" d="{d}"/>')
     return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
             + "".join(paths) + "</svg>")
 
