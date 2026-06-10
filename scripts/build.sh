@@ -43,7 +43,7 @@ SKIN_SRC="$SCRIPT_DIR/skin"             # modern düz skin + Flamingo şerit pai
 PASTE_SRC="$SCRIPT_DIR/macos-pasteimage" # panodan imaj yapıştırma (macOS cast) yaması
 RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
-ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
+ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
 FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencereleri) | 0=kapalı
 IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük (bulanıklık) yaması
@@ -271,7 +271,7 @@ zoom() {
 
 apply_icons() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
-	[ -z "$ICONS" ] && return 0
+	[ "$ICONS" = "1" ] || return 0
 	c_info "[icons] modern ikon override + HiDPI yükleyici yaması…"
 	# 1) override asset'leri jar'a enjekte et (UDE resource yoluyla)
 	if [ -d "$ICONS_SRC/overrides" ] && [ -n "$(find "$ICONS_SRC/overrides" -type f ! -name '.*' 2>/dev/null)" ]; then
@@ -496,11 +496,16 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	# 1) FlatUdeSkin'i jar'a karşı derle + enjekte et (patcher'dan ÖNCE)
 	rm -rf "$BUILD/_skinhelper"; mkdir -p "$BUILD/_skinhelper"
 	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_skinhelper" \
-		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatFontPolicy.java" \
+		"$SKIN_SRC/macosskin/DarkMode.java" \
+		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatUdeDarkSkin.java" \
+		"$SKIN_SRC/macosskin/FlatFontPolicy.java" \
 		|| { c_warn "[skin] skin helper'ları derlenemedi; yama atlandı."; return 0; }
-	# colorschemes resource'unu (varsa) helper ağacına kopyala (Task 3'te oluşur)
+	# colorschemes resource'larını helper ağacına kopyala
 	if [ -f "$SKIN_SRC/macosskin/flatude.colorschemes" ]; then
 		cp "$SKIN_SRC/macosskin/flatude.colorschemes" "$BUILD/_skinhelper/macosskin/"
+	fi
+	if [ -f "$SKIN_SRC/macosskin/flatude-dark.colorschemes" ]; then
+		cp "$SKIN_SRC/macosskin/flatude-dark.colorschemes" "$BUILD/_skinhelper/macosskin/"
 	fi
 	( cd "$BUILD/_skinhelper" && zip -q -r "$JAR" macosskin )
 	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
@@ -676,7 +681,7 @@ Hedefler:
 
 Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözülür)
        UDE_DOWNLOAD_PAGE / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
-       ICONS (boş|1; modern ikon override + HiDPI yükleyici yaması)
+       ICONS (1=açık varsayılan | 0=kapalı; modern ikon override + HiDPI yükleyici yaması)
        FOPFONTS (1=açık varsayılan | 0=kapalı; PDF dışa aktarımda Türkçe harf
                  düzeltmesi — FOP'a gömülü macOS Arial/Times fontları tanıtılır)
        PASTEIMG (1=açık varsayılan | 0=kapalı; panodan imaj yapıştırma — macOS'ta
@@ -684,7 +689,7 @@ Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözül
        IMGRESIZE (1=açık varsayılan | 0=kapalı; satır-içi imajı köşe
                  tutamaçlarıyla fare ile boyutlandırma — Word benzeri)
        SKIN (1=açık varsayılan | 0=kapalı; modern düz Substance skin + Flamingo
-                 şerit + font + teal masaüstü arka planını nötr griye çevirir)
+                 şerit + font + nötr kanvas; macOS koyu görünümde koyu tema)
 EOF
 }
 

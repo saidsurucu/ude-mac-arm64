@@ -30,7 +30,8 @@ public class SkinPatch {
         CtClass slaf = pool.get("org.jvnet.substance.SubstanceLookAndFeel");
         CtMethod setSkinStr = slaf.getMethod("setSkin", "(Ljava/lang/String;)Z");
         setSkinStr.insertBefore(
-            "{ if (!macosskin.FlatUdeSkin.installing) {"
+            "{ macosskin.DarkMode.trace(\"setSkin cagrildi arg=\" + $1 + \" installing=\" + macosskin.FlatUdeSkin.installing);"
+          + "  if (!macosskin.FlatUdeSkin.installing) {"
           + "    macosskin.FlatUdeSkin.installing = true;"
           + "    try {"
           + "      org.jvnet.substance.api.SubstanceSkin __skin ="
@@ -38,6 +39,7 @@ public class SkinPatch {
           + "          ? (org.jvnet.substance.api.SubstanceSkin) new macosskin.FlatUdeDarkSkin()"
           + "          : (org.jvnet.substance.api.SubstanceSkin) new macosskin.FlatUdeSkin();"
           + "      boolean __ok = org.jvnet.substance.SubstanceLookAndFeel.setSkin(__skin);"
+          + "      macosskin.DarkMode.trace(\"skin kuruldu ok=\" + __ok + \" dark=\" + macosskin.DarkMode.isDark());"
           + "      try {"
           + "        org.jvnet.substance.fonts.FontSet __base ="
           + "          org.jvnet.substance.SubstanceLookAndFeel.getFontPolicy().getFontSet(\"Substance\", null);"
@@ -45,6 +47,7 @@ public class SkinPatch {
           + "      } catch (Throwable __ft) { System.err.println(\"[FlatUdeSkin] font policy failed: \" + __ft); }"
           + "      return __ok;"
           + "    } catch (Throwable __t) {"
+          + "      macosskin.DarkMode.trace(\"skin install HATA: \" + __t);"
           + "      System.err.println(\"[FlatUdeSkin] skin install failed, kept original: \" + __t);"
           + "    } finally { macosskin.FlatUdeSkin.installing = false; }"
           + "  } }");
