@@ -61,6 +61,7 @@ public final class MacLook {
                     SwingUtilities.invokeLater(() -> {
                         try { unifyTitleBar(f); } catch (Throwable t) { log("titlebar: " + t); }
                         try { removeMemoryBar(f); } catch (Throwable t) { log("membar: " + t); }
+                        try { fixRulerBackground(f); } catch (Throwable t) { log("ruler: " + t); }
                     });
                 }
             }, AWTEvent.WINDOW_EVENT_MASK);
@@ -102,6 +103,29 @@ public final class MacLook {
             parent.revalidate();
             parent.repaint();
             log("WebMemoryBar kaldırıldı");
+        }
+    }
+
+    /** Cetvel zeminini koyu temada Word tonuna çek (sabit-beyaz setBackground'u ezer).
+     *  Koyu tema tespiti UIManager üzerinden — skin sınıflarına derleme bağımlılığı yok. */
+    private static void fixRulerBackground(JFrame f) {
+        java.awt.Color bg = UIManager.getColor("Panel.background");
+        boolean dark = bg != null && (bg.getRed() + bg.getGreen() + bg.getBlue()) / 3 < 100;
+        if (!dark) return;
+        fixRulerWalk(f);
+    }
+
+    private static void fixRulerWalk(Component c) {
+        for (Class<?> i : c.getClass().getInterfaces()) {
+            if (i.getName().endsWith("IRuler")) {
+                c.setBackground(new java.awt.Color(70, 70, 70));
+                c.repaint();
+                log("cetvel zemini ayarlandı: " + c.getClass().getName());
+                break;
+            }
+        }
+        if (c instanceof Container) {
+            for (Component k : ((Container) c).getComponents()) fixRulerWalk(k);
         }
     }
 

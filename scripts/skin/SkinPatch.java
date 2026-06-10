@@ -132,6 +132,48 @@ public class SkinPatch {
             System.out.println("[SkinPatch] UYARI: pref-load teal koruması atlandı: " + t);
         }
 
+        // Cetvel (gui.eV) Word koyu paleti: rakamlar a()=siyah, tikler b()/c(),
+        // işaretçiler d/e statikleri. Koyu modda Word'den ölçülen tonlara
+        // kısa devre; açık modda orijinal gövde/alanlar aynen çalışır.
+        // Zemin (beyaz setBackground) MacLook agent'ında düzeltilir.
+        try {
+            CtClass ruler = pool.get("tr.com.havelsan.uyap.system.editor.common.gui.eV");
+            ruler.getMethod("a", "()Ljava/awt/Color;").insertBefore(
+                "{ if (macosskin.DarkMode.isDark()) return new java.awt.Color(226, 226, 226); }");
+            ruler.getMethod("b", "()Ljava/awt/Color;").insertBefore(
+                "{ if (macosskin.DarkMode.isDark()) return new java.awt.Color(152, 152, 158, 250); }");
+            ruler.getMethod("c", "()Ljava/awt/Color;").insertBefore(
+                "{ if (macosskin.DarkMode.isDark()) return new java.awt.Color(152, 152, 158, 150); }");
+            ruler.instrument(new ExprEditor() {
+                public void edit(FieldAccess f) throws javassist.CannotCompileException {
+                    try {
+                        if (f.isReader() && "Ljava/awt/Color;".equals(f.getSignature())
+                                && ("d".equals(f.getFieldName()) || "e".equals(f.getFieldName()))
+                                && "tr.com.havelsan.uyap.system.editor.common.gui.eV".equals(
+                                    f.getField().getDeclaringClass().getName())) {
+                            f.replace(
+                                "{ $_ = macosskin.DarkMode.isDark()"
+                              + "    ? new java.awt.Color(220, 221, 221)"
+                              + "    : ($r) $proceed(); }");
+                        }
+                        if (f.isReader() && "LIGHT_GRAY".equals(f.getFieldName())
+                                && "java.awt.Color".equals(
+                                    f.getField().getDeclaringClass().getName())) {
+                            f.replace(
+                                "{ $_ = macosskin.DarkMode.isDark()"
+                              + "    ? new java.awt.Color(74, 74, 74)"
+                              + "    : ($r) $proceed(); }");
+                        }
+                    } catch (javassist.NotFoundException __nf) {
+                    }
+                }
+            });
+            writeClass(ruler, outDir);
+            System.out.println("[SkinPatch] cetvel renkleri koyu moda uyarlandı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: cetvel yaması atlandı: " + t);
+        }
+
         // Flamingo şerit sadeleştirme: grup başlık bandı ve çerçevesi kaldırılır
         // ("Pano/Font/Paragraf" kutuları 2007 Office izi). Flamingo obfuscate
         // değil; metot imzaları javap ile doğrulandı.
