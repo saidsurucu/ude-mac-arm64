@@ -98,6 +98,19 @@ public class MacFileDialogFilterTest {
         check("friendlyLabel null null",
               MacFileDialog.friendlyLabel(null) == null);
 
+        check("isPlaceholderName isimsiz.UDF yakalar",
+              MacFileDialog.isPlaceholderName("isimsiz.UDF"));
+        check("isPlaceholderName kucuk harf isimsiz.udf yakalar",
+              MacFileDialog.isPlaceholderName("isimsiz.udf"));
+        check("isPlaceholderName uzantisiz isimsiz yakalar",
+              MacFileDialog.isPlaceholderName("isimsiz"));
+        check("isPlaceholderName gercek ad gecer",
+              !MacFileDialog.isPlaceholderName("dilekce.udf"));
+        check("isPlaceholderName isimsiz-on-ekli ad gecer",
+              !MacFileDialog.isPlaceholderName("isimsiz-dilekce.udf"));
+        check("isPlaceholderName null false",
+              !MacFileDialog.isPlaceholderName(null));
+
         if (failures > 0) { System.out.println(failures + " test BASARISIZ"); System.exit(1); }
         System.out.println("Tum testler GECTI");
     }
