@@ -49,7 +49,7 @@ FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencer
 IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük (bulanıklık) yaması
 PASTEIMG="${PASTEIMG:-1}" # 1=açık (varsayılan; panodan imaj yapıştırma macOS düzeltmesi) | 0=kapalı
 IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçlarıyla boyutlandırma) | 0=kapalı
-SKIN="${SKIN:-}"        # boş=kapalı | 1=modern düz Substance skin + Flamingo şerit + font
+SKIN="${SKIN:-1}"       # 1=açık (varsayılan; modern düz Substance skin + Flamingo şerit + font + teal arka plan nötr gri) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -484,7 +484,7 @@ apply_imgresize() {  # $1=JAR — patch_jar içinden çağrılır
 
 apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
-	[ -z "$SKIN" ] && return 0
+	[ "$SKIN" = "1" ] || return 0
 	if unzip -l "$JAR" 2>/dev/null | grep 'macosskin/.skin-patched' >/dev/null 2>&1; then
 		c_ok "[skin] zaten yamalı, atlandı."; return 0
 	fi
@@ -683,7 +683,8 @@ Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözül
                  pano imajının Retina tipi BufferedImage cast'ini kırıyordu)
        IMGRESIZE (1=açık varsayılan | 0=kapalı; satır-içi imajı köşe
                  tutamaçlarıyla fare ile boyutlandırma — Word benzeri)
-       SKIN (boş|1; modern düz Substance skin + Flamingo şerit + font)
+       SKIN (1=açık varsayılan | 0=kapalı; modern düz Substance skin + Flamingo
+                 şerit + font + teal masaüstü arka planını nötr griye çevirir)
 EOF
 }
 

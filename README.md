@@ -183,10 +183,10 @@ Resmî paket x86_64. Native arm64 için:
    `⌘F`→bul, `⌘T`→yazı özellikleri. Mevcut Ctrl kısayolları aynen çalışır; `⌘Q/⌘W/⌘H/⌘M` gibi
    gerçek macOS kısayollarına dokunulmaz.
 
-10. **Modern düz görünüm** (`SKIN=1`) → Menüler, paneller, şerit ve durum çubuğu degradesiz
-    nötr açık renklere geçer; arayüz yazı tipi modernleşir; belge çevresindeki eski turkuaz
-    arka plan nötr griye düzeltilir. Şerit düzeni ve belge içeriği değişmez. Varsayılan
-    olarak kapalıdır; yayın sürümlerinde isteğe bağlı kullanılır.
+10. **Modern düz görünüm** (`SKIN=1`, varsayılan açık) → Menüler, paneller, şerit ve durum
+    çubuğu degradesiz nötr açık renklere geçer; arayüz yazı tipi modernleşir; belge
+    çevresindeki eski turkuaz arka plan nötr griye düzeltilir. Şerit düzeni ve belge içeriği
+    değişmez. Kapatmak için `SKIN=0 make all`.
 
 11. **Panodan görsel yapıştırma** → Panoda bir görsel varken (ekran görüntüsü, tarayıcıdan
     "görseli kopyala") Yapıştır/⌘V macOS'ta hiçbir şey yapmıyordu: macOS Java'sı pano
@@ -226,8 +226,8 @@ Resmî paket x86_64. Native arm64 için:
 make jdk           # gömülecek Java 11 yoksa kur (host mimarisi)
 make jpackage-jdk  # jpackage'lı 17+ JDK yoksa kur
 make all           # build/Uyap Doküman Editörü.app üret
-ICONS=1 make all            # + modern Material/Retina ikonlar (yayın sürümleri böyle)
-SKIN=1 ICONS=1 make all    # + modern düz görünüm (SKIN=1 opsiyonel)
+ICONS=1 make all            # + modern Material/Retina ikonlar + modern düz görünüm (yayın sürümleri böyle; SKIN varsayılan açık)
+SKIN=0 ICONS=1 make all     # modern düz görünümü kapat (eski turkuaz arka plan döner)
 ```
 
 ### Diğer hedefler
