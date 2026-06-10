@@ -316,6 +316,22 @@ public class SkinPatch {
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: sekme alanı yaması atlandı: " + t);
         }
+
+        // Hızlı erişim (taskbar) çubuğu: TaskbarPanel.paintComponent Office-2007
+        // "swoosh" dekoru basar — getOutline arc'lı kontur (dolgu + getBorderColor
+        // çizimi) ve son bileşenden panel sonuna alt çizgi. Koyu temada bunlar
+        // ikon gruplarının arasında saçma eğri/dik ayrım çizgileri olarak görünür.
+        // Dekorasyon tamamen kalkar; butonlar paintChildren ile zaten çizilir.
+        try {
+            CtClass tbPanel = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.ribbon.BasicRibbonUI$TaskbarPanel");
+            tbPanel.getMethod("paintComponent", "(Ljava/awt/Graphics;)V")
+                .setBody("{ }");
+            writeClass(tbPanel, outDir);
+            System.out.println("[SkinPatch] hızlı erişim kontur/ayraç çizgileri kaldırıldı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: hızlı erişim kontur yaması atlandı: " + t);
+        }
         try {
             CtClass tabUi = pool.get(
                 "org.pushingpixels.flamingo.internal.ui.ribbon.BasicRibbonTaskToggleButtonUI");
