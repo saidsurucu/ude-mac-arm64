@@ -223,6 +223,65 @@ public class SkinPatch {
             System.out.println("[SkinPatch] UYARI: grup kenarlık yaması atlandı: " + t);
         }
 
+        // Şerit komut butonları Word tarzı: seçili/hover/basılı durumda yuvarlak
+        // köşeli düz dolgu (Word ölçümü: seçili #474747, hover #3D3D3D koyu modda).
+        // Normal durumda arka plan YOK. Orb ve sekme butonları kendi override'larını
+        // koruduğundan etkilenmez.
+        try {
+            CtClass cmdUi = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.common.BasicCommandButtonUI");
+            cmdUi.getMethod("paintButtonBackground",
+                "(Ljava/awt/Graphics;Ljava/awt/Rectangle;)V")
+                .setBody(
+                    "{ javax.swing.ButtonModel __m = this.commandButton.getActionModel();"
+                  + "  boolean __press = __m.isArmed() || __m.isPressed();"
+                  + "  boolean __sel = __m.isSelected();"
+                  + "  boolean __roll = __m.isRollover();"
+                  + "  if (__press || __sel || __roll) {"
+                  + "    java.awt.Graphics2D __g = (java.awt.Graphics2D) $1.create();"
+                  + "    __g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,"
+                  + "        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);"
+                  + "    boolean __dark = macosskin.DarkMode.isDark();"
+                  + "    java.awt.Color __c = __press"
+                  + "        ? (__dark ? new java.awt.Color(81, 81, 81) : new java.awt.Color(196, 196, 196))"
+                  + "        : (__sel"
+                  + "            ? (__dark ? new java.awt.Color(71, 71, 71) : new java.awt.Color(208, 208, 208))"
+                  + "            : (__dark ? new java.awt.Color(61, 61, 61) : new java.awt.Color(224, 224, 224)));"
+                  + "    __g.setColor(__c);"
+                  + "    __g.fillRoundRect($2.x, $2.y, $2.width, $2.height, 8, 8);"
+                  + "    __g.dispose();"
+                  + "  } }");
+            cmdUi.getMethod("paintButtonBackground",
+                "(Ljava/awt/Graphics;Ljava/awt/Rectangle;[Ljavax/swing/ButtonModel;)V")
+                .setBody(
+                    "{ boolean __sel = false; boolean __roll = false; boolean __press = false;"
+                  + "  for (int __i = 0; __i < $3.length; __i++) {"
+                  + "    javax.swing.ButtonModel __m = $3[__i];"
+                  + "    if (__m == null) continue;"
+                  + "    if (__m.isSelected()) __sel = true;"
+                  + "    if (__m.isRollover()) __roll = true;"
+                  + "    if (__m.isArmed() || __m.isPressed()) __press = true;"
+                  + "  }"
+                  + "  if (__press || __sel || __roll) {"
+                  + "    java.awt.Graphics2D __g = (java.awt.Graphics2D) $1.create();"
+                  + "    __g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,"
+                  + "        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);"
+                  + "    boolean __dark = macosskin.DarkMode.isDark();"
+                  + "    java.awt.Color __c = __press"
+                  + "        ? (__dark ? new java.awt.Color(81, 81, 81) : new java.awt.Color(196, 196, 196))"
+                  + "        : (__sel"
+                  + "            ? (__dark ? new java.awt.Color(71, 71, 71) : new java.awt.Color(208, 208, 208))"
+                  + "            : (__dark ? new java.awt.Color(61, 61, 61) : new java.awt.Color(224, 224, 224)));"
+                  + "    __g.setColor(__c);"
+                  + "    __g.fillRoundRect($2.x, $2.y, $2.width, $2.height, 8, 8);"
+                  + "    __g.dispose();"
+                  + "  } }");
+            writeClass(cmdUi, outDir);
+            System.out.println("[SkinPatch] komut buton durum dolguları Word tarzı yapıldı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: komut buton dolgusu atlandı: " + t);
+        }
+
         // Koyu modda ikon aydınlatma: Utils.b(String) ikon yükleyicisinin
         // dönüşünü IconDarken'dan geçir (apply_icons'un multi-res sarması bu
         // noktada jar'da; biz onun ÜSTÜNE eklenir). Açık modda no-op.
