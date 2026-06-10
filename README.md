@@ -85,8 +85,9 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64
 Intel'de resmî UDE paketi zaten x86_64 olduğu için burada kazanç "Rosetta'sız native hız"
 **değildir**; kazanç şunlardır: **Java 11 ile Retina'da keskin metin**, **modern Material
 ikonlar**, **Mac klavye kısayolları**, **native macOS Aç/Kaydet pencereleri**, **trackpad /
-⌘ ile yakınlaştırma**, **e-imza (akıllı kart) düzeltmesi** ve **PDF dışa aktarımında Türkçe
-harfler**. Yani mimariye bağlı olmayan tüm iyileştirmeler Intel'de de geçerlidir.
+⌘ ile yakınlaştırma**, **e-imza (akıllı kart) düzeltmesi**, **panodan görsel yapıştırma**
+ve **PDF dışa aktarımında Türkçe harfler**. Yani mimariye bağlı olmayan tüm iyileştirmeler
+Intel'de de geçerlidir.
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
 
@@ -117,7 +118,7 @@ ve tek tek build hedeflerini açıklar.
 
 Build, çalıştığı Mac'in mimarisini `uname -m` ile **otomatik algılar** (Apple Silicon=arm64,
 Intel=x86_64) ve gömülecek Java ile launcher'ı o mimari için üretir. Aşağıdaki çözümler
-arm64'ün özgün gerekçesiyle anlatılır; **2, 3, 6, 7, 8, 9** maddeleri mimariden bağımsızdır
+arm64'ün özgün gerekçesiyle anlatılır; **2, 3, 6, 7, 8, 9, 11** maddeleri mimariden bağımsızdır
 ve Intel'de de aynen geçerlidir. Madde 4 (sqlite) arm64'te zorunluydu (3.7.2'nin arm64
 native'i yoktu); Intel'de 3.7.2 zaten x86_64 native içerir ama tek tip build için 3.46.x'e
 geçiş orada da uygulanır (jar hem `Mac/aarch64` hem `Mac/x86_64` dylib taşır).
@@ -186,6 +187,18 @@ Resmî paket x86_64. Native arm64 için:
     nötr açık renklere geçer; arayüz yazı tipi modernleşir; belge çevresindeki eski turkuaz
     arka plan nötr griye düzeltilir. Şerit düzeni ve belge içeriği değişmez. Varsayılan
     olarak kapalıdır; yayın sürümlerinde isteğe bağlı kullanılır.
+
+11. **Panodan görsel yapıştırma** → Panoda bir görsel varken (ekran görüntüsü, tarayıcıdan
+    "görseli kopyala") Yapıştır/⌘V macOS'ta hiçbir şey yapmıyordu: macOS Java'sı pano
+    görselini Retina'ya özel `MultiResolutionCachedImage` tipiyle verir, UDE'nin imaj
+    yapıştırma dalı ise `instanceof BufferedImage` denetiminde bu tipi tanımayıp dalı
+    sessizce atlar (Windows/Linux'ta tip zaten `BufferedImage` olduğundan sorun görülmez).
+    `scripts/macos-pasteimage` build yaması pano görselini güvenli biçimde dönüştürür
+    (Retina'da en yüksek çözünürlüklü varyant), yapıştırma anındaki yıkıcı sayfaya-sığdırma
+    küçültmesini kaldırır (görünen boyut değişmez, tam çözünürlük gömülür) ve görüntü
+    çizimine bicubic interpolasyon ekler → ekranda/PDF'te keskin. Metin önceliği korunur:
+    panoda metin de varsa eskisi gibi metin yapışır. Varsayılan açıktır (`PASTEIMG=0` ile
+    kapatılır).
 
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
