@@ -134,14 +134,16 @@ def compose_search(rule: str) -> str:
 
 
 def compose_glyph_chevron(glyph_name):
-    """42x26 liste butonu: glyph solda, küçük chevron sağda."""
+    """42x24 liste butonu: glyph solda, küçük chevron sağda. Şerit buton
+    yuvası ~25 logical px; 26'lık tuval glifi alta itip altdan kırptırıyordu
+    (piksel ölçümü), 24'e küçültülüp içerik ortalandı."""
     def f(rule):
         g = recolor(fetch(glyph_name), rule)
         ch = recolor(fetch("chevron_down_24_regular"), "all=#444444")
-        gi = g.replace("<svg ", '<svg x="0" y="1" width="24" height="24" ', 1)
-        ci = ch.replace("<svg ", '<svg x="27" y="7" width="12" height="12" ', 1)
-        return ('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="26" '
-                f'viewBox="0 0 42 26">{gi}{ci}</svg>')
+        gi = g.replace("<svg ", '<svg x="1" y="2" width="20" height="20" ', 1)
+        ci = ch.replace("<svg ", '<svg x="28" y="6" width="12" height="12" ', 1)
+        return ('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="24" '
+                f'viewBox="0 0 42 24">{gi}{ci}</svg>')
     return f
 
 
