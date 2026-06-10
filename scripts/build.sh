@@ -41,12 +41,14 @@ FD_SRC="$SCRIPT_DIR/macos-filedialog"   # native macOS dosya pencereleri yaması
 IMG_SRC="$SCRIPT_DIR/macos-imagefull"   # satır-içi imaj tam-çözünürlük (bulanıklık) yaması
 SKIN_SRC="$SCRIPT_DIR/skin"             # modern düz skin + Flamingo şerit paint yaması
 PASTE_SRC="$SCRIPT_DIR/macos-pasteimage" # panodan imaj yapıştırma (macOS cast) yaması
+RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
 FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencereleri) | 0=kapalı
 IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük (bulanıklık) yaması
 PASTEIMG="${PASTEIMG:-1}" # 1=açık (varsayılan; panodan imaj yapıştırma macOS düzeltmesi) | 0=kapalı
+IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçlarıyla boyutlandırma) | 0=kapalı
 SKIN="${SKIN:-}"        # boş=kapalı | 1=modern düz Substance skin + Flamingo şerit + font
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
@@ -447,6 +449,39 @@ apply_pasteimage() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[pasteimage] panodan imaj yapıştırma yaması uygulandı."
 }
 
+apply_imgresize() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$IMGRESIZE" = "1" ] || return 0
+	# İdempotans: helper zaten enjekte edilmişse atla.
+	# grep -q DEĞİL (SIGPIPE/pipefail tuzağı): grep tüm girdiyi okuyup >/dev/null'a yazar.
+	if unzip -l "$JAR" 2>/dev/null | grep 'macosimgresize/ImageResizeController.class' >/dev/null 2>&1; then
+		c_ok "[imgresize] zaten yamalı, atlandı."; return 0
+	fi
+	c_info "[imgresize] fare ile imaj boyutlandırma yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[imgresize] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[imgresize] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
+	# 1) denetçi helper'ı derle + jar'a enjekte et (patcher'dan ÖNCE; intercept
+	#    çağrısı derlemesi denetçiyi jar classpath'inden çözer)
+	rm -rf "$BUILD/_resizehelper"; mkdir -p "$BUILD/_resizehelper"
+	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_resizehelper" "$RESIZE_SRC/macosimgresize/ImageResizeController.java" \
+		|| { c_warn "[imgresize] ImageResizeController derlenemedi; yama atlandı."; return 0; }
+	( cd "$BUILD/_resizehelper" && zip -q -r "$JAR" macosimgresize )
+	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
+	rm -rf "$BUILD/_resizepatch"; mkdir -p "$BUILD/_resizepatch/out"
+	"$jc" --release 11 -encoding UTF-8 -cp "$jvs" -d "$BUILD/_resizepatch" "$RESIZE_SRC/ImageResizePatch.java" \
+		|| { c_warn "[imgresize] ImageResizePatch derlenemedi; yama atlandı."; return 0; }
+	if ! "$jr" -cp "$BUILD/_resizepatch:$jvs" ImageResizePatch "$JAR" "$BUILD/_resizepatch/out"; then
+		# Yarım-yama bırakma: helper'ı geri çıkar ki idempotans kontrolü yanılmasın.
+		zip -q -d "$JAR" 'macosimgresize/*' >/dev/null 2>&1 || true
+		c_warn "[imgresize] hj yaması uygulanamadı (UDE sürümü değişmiş olabilir); yama geri alındı."
+		return 0
+	fi
+	( cd "$BUILD/_resizepatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[imgresize] fare ile imaj boyutlandırma yaması uygulandı."
+}
+
 apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ -z "$SKIN" ] && return 0
@@ -498,6 +533,7 @@ patch_jar() {
 	apply_filedialog "$JAR"
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
+	apply_imgresize "$JAR"
 	apply_skin "$JAR"
 	unzip -l "$JAR" | grep "Mac/$SQLITE_ARCH/libsqlitejdbc.dylib" >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
@@ -645,6 +681,8 @@ Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözül
                  düzeltmesi — FOP'a gömülü macOS Arial/Times fontları tanıtılır)
        PASTEIMG (1=açık varsayılan | 0=kapalı; panodan imaj yapıştırma — macOS'ta
                  pano imajının Retina tipi BufferedImage cast'ini kırıyordu)
+       IMGRESIZE (1=açık varsayılan | 0=kapalı; satır-içi imajı köşe
+                 tutamaçlarıyla fare ile boyutlandırma — Word benzeri)
        SKIN (boş|1; modern düz Substance skin + Flamingo şerit + font)
 EOF
 }
@@ -655,6 +693,7 @@ case "${1:-all}" in
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	image-resize) apply_imgresize "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	skin) SKIN=1 apply_skin "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	package) package ;; sign) sign ;; dmg) dmg ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
