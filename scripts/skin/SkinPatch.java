@@ -41,6 +41,7 @@ public class SkinPatch {
           + "      boolean __ok = org.jvnet.substance.SubstanceLookAndFeel.setSkin(__skin);"
           + "      javax.swing.UIManager.put(\"ScrollBarUI\", \"com.apple.laf.AquaScrollBarUI\");"
           + "      javax.swing.UIManager.put(\"SliderUI\", \"com.apple.laf.AquaSliderUI\");"
+          + "      macosskin.WordTooltip.install();"
           + "      macosskin.DarkMode.trace(\"skin kuruldu ok=\" + __ok + \" dark=\" + macosskin.DarkMode.isDark());"
           + "      try {"
           + "        org.jvnet.substance.fonts.FontSet __base ="
@@ -77,6 +78,7 @@ public class SkinPatch {
           + "        org.jvnet.substance.SubstanceLookAndFeel.setSkin(__skin);"
           + "        javax.swing.UIManager.put(\"ScrollBarUI\", \"com.apple.laf.AquaScrollBarUI\");"
           + "      javax.swing.UIManager.put(\"SliderUI\", \"com.apple.laf.AquaSliderUI\");"
+          + "        macosskin.WordTooltip.install();"
           + "        try {"
           + "          org.jvnet.substance.fonts.FontSet __base ="
           + "            org.jvnet.substance.SubstanceLookAndFeel.getFontPolicy().getFontSet(\"Substance\", null);"
@@ -358,6 +360,30 @@ public class SkinPatch {
             System.out.println("[SkinPatch] Orb arka plan efekti düzleştirildi.");
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: orb arka plan yaması atlandı: " + t);
+        }
+
+        // Zengin tooltip (RichTooltip) Word tarzı: paintBackground hardcoded
+        // AÇIK gradyan basar (Label.disabledForeground.brighter() 0.9/0.4) ->
+        // koyu modda açık metin + açık zemin = okunmaz. Tema-duyarlı düz dolgu
+        // (Word ölçümü: koyu #2E3032, açık beyaz); metin renkleri temadan,
+        // kontur getBorderColor() yamasından zaten doğru. Substance'ın kendi
+        // RichTooltip delegate'i yok, Basic'i yamalamak yeterli.
+        try {
+            CtClass rtUi = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.common.BasicRichTooltipPanelUI");
+            rtUi.getMethod("paintBackground", "(Ljava/awt/Graphics;)V")
+                .setBody(
+                    "{ java.awt.Graphics2D __g = (java.awt.Graphics2D) $1.create();"
+                  + "  __g.setColor(macosskin.DarkMode.isDark()"
+                  + "      ? new java.awt.Color(46, 48, 50)"
+                  + "      : java.awt.Color.WHITE);"
+                  + "  __g.fillRect(0, 0, this.richTooltipPanel.getWidth(),"
+                  + "      this.richTooltipPanel.getHeight());"
+                  + "  __g.dispose(); }");
+            writeClass(rtUi, outDir);
+            System.out.println("[SkinPatch] zengin tooltip Word tarzı düz dolguya çekildi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: zengin tooltip yaması atlandı: " + t);
         }
     }
 

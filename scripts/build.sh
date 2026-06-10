@@ -509,6 +509,7 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 		"$SKIN_SRC/macosskin/DarkMode.java" "$SKIN_SRC/macosskin/IconDarken.java" \
 		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatUdeDarkSkin.java" \
 		"$SKIN_SRC/macosskin/FlatFontPolicy.java" \
+		"$SKIN_SRC/macosskin/WordTooltip.java" \
 		|| { c_warn "[skin] skin helper'ları derlenemedi; yama atlandı."; return 0; }
 	# colorschemes resource'larını helper ağacına kopyala
 	if [ -f "$SKIN_SRC/macosskin/flatude.colorschemes" ]; then
