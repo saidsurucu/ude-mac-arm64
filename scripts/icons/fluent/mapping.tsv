@@ -325,3 +325,30 @@ macroStop	auto	stop_24_regular	all=#D13438
 macroStopBig	auto	stop_24_regular	all=#D13438
 warningIconBg	auto	circle_24_filled	all=#D9A21B
 warningIconFr	auto	error_circle_24_filled	all=#D13438
+# --- jar'da olup override'ı olmayanlar (boyut açık yazılır) ---
+apdu	24x24	payment_24_regular	all=#444444
+certificate72	72x72	certificate_24_regular	all=#D9A21B
+CMK_147	24x24	book_24_regular	all=#444444
+erasable	36x35	eraser_24_regular	all=#107C41
+notErasable	35x35	eraser_24_regular	all=#D13438
+hak_musteki	16x16	person_note_24_regular	all=#2B7CD3
+hak_sanik	16x16	person_note_24_regular	all=#D9A21B
+secretDocument	72x72	lock_closed_24_regular	all=#D13438
+# --- KEEP: stil önizlemeleri, logo, placeholder görseller ---
+numberType1	auto	KEEP	-
+numberType2	auto	KEEP	-
+numberType3	auto	KEEP	-
+numberType4	auto	KEEP	-
+numberType5	auto	KEEP	-
+numberType6	auto	KEEP	-
+numberType7	auto	KEEP	-
+numberType8	auto	KEEP	-
+mlListType1	auto	KEEP	-
+mlListType2	auto	KEEP	-
+mlListType3	auto	KEEP	-
+mlListType4	auto	KEEP	-
+mlListType5	auto	KEEP	-
+ude2	auto	KEEP	-
+default	auto	KEEP	-
+image_not_found	auto	KEEP	-
+printPreviewBG	auto	KEEP	-
