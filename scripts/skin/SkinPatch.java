@@ -161,7 +161,7 @@ public class SkinPatch {
                                     f.getField().getDeclaringClass().getName())) {
                             f.replace(
                                 "{ $_ = macosskin.DarkMode.isDark()"
-                              + "    ? new java.awt.Color(74, 74, 74)"
+                              + "    ? new java.awt.Color(38, 38, 38)"
                               + "    : ($r) $proceed(); }");
                         }
                     } catch (javassist.NotFoundException __nf) {
