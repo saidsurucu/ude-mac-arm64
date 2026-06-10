@@ -387,6 +387,57 @@ public class SkinPatch {
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: zengin tooltip yaması atlandı: " + t);
         }
+
+        // Orb uygulama menüsü Word tarzı: popup kenarlıkları anonim Border iç
+        // sınıflarından gelir ve Label.disabledForeground (+brighter x2) okur ->
+        // koyu temada bembeyaz çift çerçeve. $8 (dış kenarlık) ayrıca üstte 20px
+        // Office-2007 bandı (renderSurface) + orb KOPYASI çizer; $9 mainPanel'e
+        // ikinci çift çerçeve, $6 sütun ayracı, $7 footer'a gradyan basar.
+        // Tek ince tema-duyarlı kontur kalır, gerisi düzlenir.
+        try {
+            String pp = "org.pushingpixels.flamingo.internal.ui.ribbon.appmenu."
+                + "BasicRibbonApplicationMenuPopupPanelUI";
+            CtClass outerB = pool.get(pp + "$8");
+            outerB.getMethod("getBorderInsets",
+                "(Ljava/awt/Component;)Ljava/awt/Insets;")
+                .setBody("{ return new java.awt.Insets(6, 4, 6, 4); }");
+            outerB.getMethod("paintBorder",
+                "(Ljava/awt/Component;Ljava/awt/Graphics;IIII)V")
+                .setBody(
+                    "{ $2.setColor(macosskin.DarkMode.isDark()"
+                  + "    ? new java.awt.Color(90, 90, 90)"
+                  + "    : new java.awt.Color(200, 200, 200));"
+                  + "  $2.drawRect($3, $4, $5 - 1, $6 - 1); }");
+            writeClass(outerB, outDir);
+
+            CtClass mainB = pool.get(pp + "$9");
+            mainB.getMethod("paintBorder",
+                "(Ljava/awt/Component;Ljava/awt/Graphics;IIII)V")
+                .setBody("{ }");
+            writeClass(mainB, outDir);
+
+            CtClass divB = pool.get(pp + "$6");
+            divB.getMethod("paintBorder",
+                "(Ljava/awt/Component;Ljava/awt/Graphics;IIII)V")
+                .setBody(
+                    "{ $2.setColor(macosskin.DarkMode.isDark()"
+                  + "    ? new java.awt.Color(61, 61, 61)"
+                  + "    : new java.awt.Color(224, 224, 224));"
+                  + "  int __x = $1.getComponentOrientation().isLeftToRight()"
+                  + "      ? $3 : $3 + $5 - 1;"
+                  + "  $2.drawLine(__x, $4, __x, $4 + $6); }");
+            writeClass(divB, outDir);
+
+            CtClass footB = pool.get(pp + "$7");
+            footB.getMethod("paintComponent", "(Ljava/awt/Graphics;)V")
+                .setBody(
+                    "{ $1.setColor(this.getBackground());"
+                  + "  $1.fillRect(0, 0, this.getWidth(), this.getHeight()); }");
+            writeClass(footB, outDir);
+            System.out.println("[SkinPatch] orb menü popup'ı Word tarzına çekildi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: orb menü popup yaması atlandı: " + t);
+        }
     }
 
     private static void writeClass(CtClass cc, File outDir) throws Exception {
