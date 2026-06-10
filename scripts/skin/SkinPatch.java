@@ -114,7 +114,8 @@ public class SkinPatch {
                                     f.getField().getDeclaringClass().getName())) {
                             f.replace(
                                 "{ java.awt.Color __v = $1;"
-                              + "  if (__v != null && (__v.getRGB() == -13854290 || __v.getRGB() == -1775637)) {"
+                              + "  if (__v != null && (__v.getRGB() == -13854290 || __v.getRGB() == -1775637"
+                              + "      || __v.getRGB() == -14803426 || __v.getRGB() == -13224394)) {"
                               + "    __v = macosskin.DarkMode.canvasColor();"
                               + "  }"
                               + "  $proceed(__v); }");
@@ -156,7 +157,7 @@ public class SkinPatch {
             fu.getMethod("getBorderColor", "()Ljava/awt/Color;")
                 .setBody(
                     "{ return macosskin.DarkMode.isDark()"
-                  + "    ? new java.awt.Color(82, 89, 99)"
+                  + "    ? new java.awt.Color(74, 74, 74)"
                   + "    : new java.awt.Color(186, 192, 200); }");
             writeClass(fu, outDir);
             System.out.println("[SkinPatch] Flamingo kontur rengi grafite çekildi.");

@@ -1,65 +1,65 @@
 FlatUdeDark Active {
     kind=Dark
-    colorUltraLight=#4A5568
-    colorExtraLight=#414B5A
-    colorLight=#3A434F
-    colorMid=#333B45
-    colorDark=#2B313A
-    colorUltraDark=#23272E
-    colorForeground=#E5E7EB
+    colorUltraLight=#323232
+    colorExtraLight=#2E2E2E
+    colorLight=#2B2B2B
+    colorMid=#282828
+    colorDark=#242424
+    colorUltraDark=#1F1F1F
+    colorForeground=#E4E4E4
 }
 
 FlatUdeDark Default {
     kind=Dark
-    colorUltraLight=#3B3F46
-    colorExtraLight=#35393F
-    colorLight=#2F3338
-    colorMid=#2A2D32
-    colorDark=#222428
-    colorUltraDark=#1B1D20
-    colorForeground=#D1D5DB
+    colorUltraLight=#2B2B2B
+    colorExtraLight=#272727
+    colorLight=#242424
+    colorMid=#212121
+    colorDark=#1D1D1D
+    colorUltraDark=#181818
+    colorForeground=#E4E4E4
 }
 
 FlatUdeDark Disabled {
     kind=Dark
-    colorUltraLight=#34373C
-    colorExtraLight=#303338
-    colorLight=#2C2F33
-    colorMid=#27292D
-    colorDark=#212326
-    colorUltraDark=#1B1C1F
-    colorForeground=#6B7280
+    colorUltraLight=#282828
+    colorExtraLight=#252525
+    colorLight=#222222
+    colorMid=#1F1F1F
+    colorDark=#1C1C1C
+    colorUltraDark=#181818
+    colorForeground=#6E6E6E
 }
 
 FlatUdeDark Rollover Unselected {
     kind=Dark
-    colorUltraLight=#4B5563
-    colorExtraLight=#444E5B
-    colorLight=#3D4652
-    colorMid=#353D48
-    colorDark=#2C333C
-    colorUltraDark=#242A31
-    colorForeground=#F3F4F6
+    colorUltraLight=#3D3D3D
+    colorExtraLight=#383838
+    colorLight=#353535
+    colorMid=#323232
+    colorDark=#2E2E2E
+    colorUltraDark=#282828
+    colorForeground=#FFFFFF
 }
 
 FlatUdeDark Rollover Selected {
     kind=Dark
-    colorUltraLight=#5B6779
-    colorExtraLight=#525D6E
-    colorLight=#485263
-    colorMid=#3E4757
-    colorDark=#343C49
-    colorUltraDark=#2A313C
-    colorForeground=#F9FAFB
+    colorUltraLight=#4A4A4A
+    colorExtraLight=#454545
+    colorLight=#414141
+    colorMid=#3D3D3D
+    colorDark=#383838
+    colorUltraDark=#323232
+    colorForeground=#FFFFFF
 }
 
 FlatUdeDark Pressed {
     kind=Dark
-    colorUltraLight=#6B7280
-    colorExtraLight=#5F6673
-    colorLight=#525965
-    colorMid=#464C57
-    colorDark=#393F48
-    colorUltraDark=#2D323A
-    colorForeground=#F8FAFC
+    colorUltraLight=#555555
+    colorExtraLight=#4F4F4F
+    colorLight=#4A4A4A
+    colorMid=#454545
+    colorDark=#3F3F3F
+    colorUltraDark=#383838
+    colorForeground=#FFFFFF
 }

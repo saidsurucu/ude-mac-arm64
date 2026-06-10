@@ -39,9 +39,10 @@ public final class DarkMode {
         return dark.booleanValue();
     }
 
-    /** Editör masaüstü (kanvas) rengi: açıkta nötr gri, koyuda koyu gri. */
+    /** Editör masaüstü (kanvas) rengi: açıkta nötr gri, koyuda Word-Mac
+     *  koyu yüzeyiyle aynı (#282828 — Word şerit=kanvas tek ton kullanır). */
     public static Color canvasColor() {
-        return isDark() ? new Color(30, 30, 30) : new Color(228, 231, 235);
+        return isDark() ? new Color(40, 40, 40) : new Color(228, 231, 235);
     }
 
     /** -Dmacosskin.debug=1 ile teşhis izi (System.err uygulama tarafından yutulur; dosyaya yaz). */
