@@ -1,6 +1,7 @@
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
+import javassist.CtNewMethod;
 import javassist.expr.ExprEditor;
 import javassist.expr.FieldAccess;
 
@@ -230,7 +231,8 @@ public class SkinPatch {
         // Şerit komut butonları Word tarzı: seçili/hover/basılı durumda yuvarlak
         // köşeli düz dolgu (Word ölçümü: seçili #474747, hover #3D3D3D koyu modda).
         // Normal durumda arka plan YOK. Orb ve sekme butonları kendi override'larını
-        // koruduğundan etkilenmez.
+        // koruduğundan etkilenmez. MENÜ butonları (JCommandMenuButton/Toggle) koyu
+        // modda Word menü vurgusu: tam satır köşesiz mavi dolgu (#3B69DA ölçüm).
         try {
             CtClass cmdUi = pool.get(
                 "org.pushingpixels.flamingo.internal.ui.common.BasicCommandButtonUI");
@@ -241,18 +243,38 @@ public class SkinPatch {
                   + "  boolean __press = __m.isArmed() || __m.isPressed();"
                   + "  boolean __sel = __m.isSelected();"
                   + "  boolean __roll = __m.isRollover();"
+                  + "  if (this.commandButton instanceof"
+                  + "      org.pushingpixels.flamingo.api.common.JCommandButton) {"
+                  + "    org.pushingpixels.flamingo.api.common.model.PopupButtonModel __pm ="
+                  + "        ((org.pushingpixels.flamingo.api.common.JCommandButton)"
+                  + "            this.commandButton).getPopupModel();"
+                  + "    if (__pm != null) {"
+                  + "      if (__pm.isPopupShowing()) __roll = true;"
+                  + "      if (__pm.isRollover()) __roll = true;"
+                  + "      if (__pm.isArmed() || __pm.isPressed()) __press = true;"
+                  + "    }"
+                  + "  }"
                   + "  if (__press || __sel || __roll) {"
                   + "    java.awt.Graphics2D __g = (java.awt.Graphics2D) $1.create();"
                   + "    __g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,"
                   + "        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);"
                   + "    boolean __dark = macosskin.DarkMode.isDark();"
-                  + "    java.awt.Color __c = __press"
-                  + "        ? (__dark ? new java.awt.Color(81, 81, 81) : new java.awt.Color(196, 196, 196))"
-                  + "        : (__sel"
-                  + "            ? (__dark ? new java.awt.Color(71, 71, 71) : new java.awt.Color(208, 208, 208))"
-                  + "            : (__dark ? new java.awt.Color(61, 61, 61) : new java.awt.Color(224, 224, 224)));"
-                  + "    __g.setColor(__c);"
-                  + "    __g.fillRoundRect($2.x, $2.y, $2.width, $2.height, 8, 8);"
+                  + "    boolean __menu = (this.commandButton instanceof"
+                  + "        org.pushingpixels.flamingo.api.common.JCommandMenuButton)"
+                  + "      || (this.commandButton instanceof"
+                  + "        org.pushingpixels.flamingo.api.common.JCommandToggleMenuButton);"
+                  + "    if (__menu && __dark) {"
+                  + "      __g.setColor(new java.awt.Color(59, 105, 218));"
+                  + "      __g.fillRect($2.x, $2.y, $2.width, $2.height);"
+                  + "    } else {"
+                  + "      java.awt.Color __c = __press"
+                  + "          ? (__dark ? new java.awt.Color(81, 81, 81) : new java.awt.Color(196, 196, 196))"
+                  + "          : (__sel"
+                  + "              ? (__dark ? new java.awt.Color(71, 71, 71) : new java.awt.Color(208, 208, 208))"
+                  + "              : (__dark ? new java.awt.Color(61, 61, 61) : new java.awt.Color(224, 224, 224)));"
+                  + "      __g.setColor(__c);"
+                  + "      __g.fillRoundRect($2.x, $2.y, $2.width, $2.height, 8, 8);"
+                  + "    }"
                   + "    __g.dispose();"
                   + "  } }");
             cmdUi.getMethod("paintButtonBackground",
@@ -271,13 +293,22 @@ public class SkinPatch {
                   + "    __g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,"
                   + "        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);"
                   + "    boolean __dark = macosskin.DarkMode.isDark();"
-                  + "    java.awt.Color __c = __press"
-                  + "        ? (__dark ? new java.awt.Color(81, 81, 81) : new java.awt.Color(196, 196, 196))"
-                  + "        : (__sel"
-                  + "            ? (__dark ? new java.awt.Color(71, 71, 71) : new java.awt.Color(208, 208, 208))"
-                  + "            : (__dark ? new java.awt.Color(61, 61, 61) : new java.awt.Color(224, 224, 224)));"
-                  + "    __g.setColor(__c);"
-                  + "    __g.fillRoundRect($2.x, $2.y, $2.width, $2.height, 8, 8);"
+                  + "    boolean __menu = (this.commandButton instanceof"
+                  + "        org.pushingpixels.flamingo.api.common.JCommandMenuButton)"
+                  + "      || (this.commandButton instanceof"
+                  + "        org.pushingpixels.flamingo.api.common.JCommandToggleMenuButton);"
+                  + "    if (__menu && __dark) {"
+                  + "      __g.setColor(new java.awt.Color(59, 105, 218));"
+                  + "      __g.fillRect($2.x, $2.y, $2.width, $2.height);"
+                  + "    } else {"
+                  + "      java.awt.Color __c = __press"
+                  + "          ? (__dark ? new java.awt.Color(81, 81, 81) : new java.awt.Color(196, 196, 196))"
+                  + "          : (__sel"
+                  + "              ? (__dark ? new java.awt.Color(71, 71, 71) : new java.awt.Color(208, 208, 208))"
+                  + "              : (__dark ? new java.awt.Color(61, 61, 61) : new java.awt.Color(224, 224, 224)));"
+                  + "      __g.setColor(__c);"
+                  + "      __g.fillRoundRect($2.x, $2.y, $2.width, $2.height, 8, 8);"
+                  + "    }"
                   + "    __g.dispose();"
                   + "  } }");
             writeClass(cmdUi, outDir);
@@ -453,6 +484,127 @@ public class SkinPatch {
             System.out.println("[SkinPatch] orb menü popup'ı Word tarzına çekildi.");
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: orb menü popup yaması atlandı: " + t);
+        }
+
+        // Komut popup'ları (Bul/Değiştir gibi açılır menüler) Word tarzı:
+        // BasicPopupPanelUI.installDefaults LineBorder(getBorderColor) kurar ->
+        // koyu temada gri çerçeve. Word ölçümü: popup yüzeyi şeritten KOYU
+        // (#1E1E1E), kenarlık siyaha yakın (#050505); açık temada beyaz yüzey +
+        // #C8C8C8 kontur (orb menü değerleri). setBackground/setBorder UIResource
+        // OLMAYAN değer bıraktığından sonraki installDefaults çağrıları ezmez.
+        try {
+            CtClass ppUi = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.common.popup.BasicPopupPanelUI");
+            ppUi.getMethod("installDefaults", "()V")
+                .insertAfter(
+                    "{ boolean __dark = macosskin.DarkMode.isDark();"
+                  + "  this.popupPanel.setBackground(__dark"
+                  + "      ? new java.awt.Color(30, 30, 30) : java.awt.Color.WHITE);"
+                  + "  this.popupPanel.setBorder("
+                  + "      javax.swing.BorderFactory.createCompoundBorder("
+                  + "          javax.swing.BorderFactory.createLineBorder(__dark"
+                  + "              ? new java.awt.Color(5, 5, 5)"
+                  + "              : new java.awt.Color(200, 200, 200)),"
+                  + "          javax.swing.BorderFactory.createEmptyBorder(4, 1, 4, 1))); }");
+            writeClass(ppUi, outDir);
+            System.out.println("[SkinPatch] komut popup paneli Word tarzına çekildi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: komut popup yaması atlandı: " + t);
+        }
+
+        // Şerit butonu odak çerçevesi: UDE'nin FocusListener'ı (a.b.a.a.t)
+        // focusGained'de butona BevelBorder(RAISED) basar (Win95 kalıntısı) —
+        // popup açılınca buton odaklandığından gri kabartma çerçeve belirir
+        // (runtime iz-grafikle kanıtlandı: BevelBorder.paintRaisedBevel).
+        // focusGained boşaltılır; focusLost orijinal border'ı geri koyduğundan
+        // zararsız no-op kalır.
+        try {
+            CtClass fl = pool.get("tr.gov.uyap.system.a.b.a.a.t");
+            fl.getMethod("focusGained", "(Ljava/awt/event/FocusEvent;)V")
+                .setBody("{ }");
+            writeClass(fl, outDir);
+            System.out.println("[SkinPatch] buton odak BevelBorder çerçevesi kaldırıldı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: odak çerçeve yaması atlandı: " + t);
+        }
+
+        // Galeri popup panelleri (Madde İşareti Kitaplığı vb.): grup zemini
+        // gri fillRect, grup başlığı Office renderSurface bandı, başlık etiketi
+        // koyu metin — koyu temada okunmaz açık bloklar. Zemin popup yüzeyine
+        // (#1E1E1E/beyaz), başlık bandı hafif ayrık tona düzlenir; etiket
+        // metni koyu modda açığa çekilir.
+        try {
+            CtClass pnl = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.common.BasicCommandButtonPanelUI");
+            pnl.getMethod("paintGroupBackground", "(Ljava/awt/Graphics;IIIII)V")
+                .setBody(
+                    "{ $1.setColor(macosskin.DarkMode.isDark()"
+                  + "    ? new java.awt.Color(30, 30, 30) : java.awt.Color.WHITE);"
+                  + "  $1.fillRect($3, $4, $5, $6); }");
+            pnl.getMethod("paintGroupTitleBackground", "(Ljava/awt/Graphics;IIIII)V")
+                .setBody(
+                    "{ $1.setColor(macosskin.DarkMode.isDark()"
+                  + "    ? new java.awt.Color(42, 42, 42) : new java.awt.Color(240, 240, 240));"
+                  + "  $1.fillRect($3, $4, $5, $6); }");
+            pnl.getMethod("recomputeGroupHeaders", "()V")
+                .insertAfter(
+                    "{ if (this.groupLabels != null && macosskin.DarkMode.isDark()) {"
+                  + "    for (int __i = 0; __i < this.groupLabels.length; __i++) {"
+                  + "      if (this.groupLabels[__i] != null)"
+                  + "        this.groupLabels[__i].setForeground("
+                  + "            new java.awt.Color(228, 228, 228));"
+                  + "    }"
+                  + "  } }");
+            writeClass(pnl, outDir);
+            System.out.println("[SkinPatch] galeri popup paneli Word tarzına çekildi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: galeri panel yaması atlandı: " + t);
+        }
+
+        // UDE özel popup widget'ları (madde işareti / numaralandırma galerileri
+        // vb.): gui.a.t (etiket/karo) ve gui.a.A (panel) Win95 sabit renkleri
+        // çalışma anında setBackground/Foreground/Border ile alır (zemin
+        // #7A7A7A/LIGHT_GRAY, seçim turuncusu #FFCC99 ailesi, kontur silver —
+        // iz-grafik probe ile kanıtlandı). Sınıflara override enjekte edilir,
+        // değerler PopupRemap'ten tema-duyarlı eşlenir; seçim değişimlerinde
+        // takılan yeni border'lar da böylece yakalanır.
+        try {
+            String[] widgets = {
+                "tr.com.havelsan.uyap.system.editor.common.gui.a.t",
+                "tr.com.havelsan.uyap.system.editor.common.gui.a.A",
+            };
+            for (String w : widgets) {
+                CtClass cc = pool.get(w);
+                cc.addMethod(CtNewMethod.make(
+                    "public void setBackground(java.awt.Color c)"
+                  + "{ super.setBackground(macosskin.PopupRemap.bg(c)); }", cc));
+                cc.addMethod(CtNewMethod.make(
+                    "public void setForeground(java.awt.Color c)"
+                  + "{ super.setForeground(macosskin.PopupRemap.fg(c)); }", cc));
+                cc.addMethod(CtNewMethod.make(
+                    "public void setBorder(javax.swing.border.Border b)"
+                  + "{ super.setBorder(macosskin.PopupRemap.border(b)); }", cc));
+                writeClass(cc, outDir);
+            }
+            System.out.println("[SkinPatch] özel popup widget renkleri PopupRemap'e bağlandı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: popup widget yaması atlandı: " + t);
+        }
+
+        // Popup menü ikon oluğu: MenuPanel Office-2007 renderSurface bandı +
+        // ayraç çizgisi basar; Word menülerinde oluk yok — ikisi de boşaltılır.
+        try {
+            CtClass mp = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.common.popup."
+                + "BasicCommandPopupMenuUI$MenuPanel");
+            mp.getMethod("paintIconGutterBackground", "(Ljava/awt/Graphics;)V")
+                .setBody("{ }");
+            mp.getMethod("paintIconGutterSeparator", "(Ljava/awt/Graphics;)V")
+                .setBody("{ }");
+            writeClass(mp, outDir);
+            System.out.println("[SkinPatch] popup menü ikon oluğu düzlendi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: ikon oluğu yaması atlandı: " + t);
         }
     }
 
