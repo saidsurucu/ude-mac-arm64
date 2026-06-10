@@ -65,6 +65,18 @@ public final class MacFileDialog {
         return null;
     }
 
+    /**
+     * "isimsiz" yer tutucu adı mı? UDE, "isimsiz.UDF" adıyla kaydetmeyi sessizce
+     * yutar (cA: ad isimsiz.UDF ise discardAllEdits + return, dosya yazılmaz);
+     * bu ad panele ön-doldurulursa kullanıcı varsayılanı onaylayıp veri kaybeder.
+     */
+    static boolean isPlaceholderName(String name) {
+        if (name == null) return false;
+        String known = knownExtOf(name);
+        String base = (known != null) ? name.substring(0, name.length() - known.length() - 1) : name;
+        return base.equalsIgnoreCase("isimsiz");
+    }
+
     /** Uzantı için kullanıcıya gösterilecek dostça etiket; bilinmeyen/null → null. */
     static String friendlyLabel(String ext) {
         if (ext == null) return null;
@@ -213,10 +225,22 @@ public final class MacFileDialog {
             String title = fc.getDialogTitle();
             if (title == null || title.isEmpty()) title = (mode == FileDialog.SAVE) ? "Kaydet" : "Aç";
 
+            // apple.awt.fullWindowContent'li sahibe bağlanan panel hiç görünmeden
+            // sonsuza dek bloklar (MacLook bütünleşik başlık çubuğu + Zulu 11,
+            // uygulama içinde doğrulandı); bu pencerelerde panel sahipsiz açılır.
+            // owner referansı korunur: docNameFromTitle başlıktan ad çıkarmayı sürdürür.
+            Window dialogOwner = owner;
+            if (dialogOwner instanceof javax.swing.RootPaneContainer) {
+                javax.swing.JRootPane rp = ((javax.swing.RootPaneContainer) dialogOwner).getRootPane();
+                if (rp != null && Boolean.TRUE.equals(rp.getClientProperty("apple.awt.fullWindowContent"))) {
+                    dialogOwner = null;
+                }
+            }
+
             FileDialog fd;
-            if (owner instanceof Frame)       fd = new FileDialog((Frame) owner, title, mode);
-            else if (owner instanceof Dialog) fd = new FileDialog((Dialog) owner, title, mode);
-            else                              fd = new FileDialog((Frame) null, title, mode);
+            if (dialogOwner instanceof Frame)       fd = new FileDialog((Frame) dialogOwner, title, mode);
+            else if (dialogOwner instanceof Dialog) fd = new FileDialog((Dialog) dialogOwner, title, mode);
+            else                                    fd = new FileDialog((Frame) null, title, mode);
 
             File dir = fc.getCurrentDirectory();
             if (dir != null) fd.setDirectory(dir.getAbsolutePath());
@@ -229,7 +253,9 @@ public final class MacFileDialog {
                 // Açık belgenin adını pencere başlığından al (ör. "isimsiz.UDF").
                 // Başlık biçimi: "Doküman Editörü vX (*) - <ad> (<tam yol>)".
                 String docName = docNameFromTitle(owner);
-                if (docName != null && !docName.isEmpty()) fd.setFile(docName);
+                if (docName != null && !docName.isEmpty() && !isPlaceholderName(docName)) {
+                    fd.setFile(docName);
+                }
             }
 
             // SAVE: native panelde format dropdown'ı yok. 2+ filtre varsa önce
