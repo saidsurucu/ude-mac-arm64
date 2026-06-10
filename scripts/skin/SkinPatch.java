@@ -126,6 +126,86 @@ public class SkinPatch {
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: pref-load teal koruması atlandı: " + t);
         }
+
+        // Flamingo şerit sadeleştirme: grup başlık bandı ve çerçevesi kaldırılır
+        // ("Pano/Font/Paragraf" kutuları 2007 Office izi). Flamingo obfuscate
+        // değil; metot imzaları javap ile doğrulandı.
+        try {
+            CtClass bandUi = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.ribbon.BasicRibbonBandUI");
+            bandUi.getMethod("paintBandTitle",
+                "(Ljava/awt/Graphics;Ljava/awt/Rectangle;Ljava/lang/String;)V")
+                .setBody("{ }");
+            bandUi.getMethod("paintBandTitleBackground",
+                "(Ljava/awt/Graphics;Ljava/awt/Rectangle;Ljava/lang/String;)V")
+                .setBody("{ }");
+            writeClass(bandUi, outDir);
+            System.out.println("[SkinPatch] Flamingo band başlığı/çerçevesi kaldırıldı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: Flamingo band yaması atlandı: " + t);
+        }
+
+        // Flamingo kontur rengi: getBorderColor() UIManager
+        // TextField.inactiveForeground okur; koyu şemada bu AÇIK renktir ->
+        // aktif sekme bembeyaz çerçeveli görünür. Tema-duyarlı grafit döndür.
+        try {
+            CtClass fu = pool.get(
+                "org.pushingpixels.flamingo.internal.utils.FlamingoUtilities");
+            fu.getMethod("getBorderColor", "()Ljava/awt/Color;")
+                .setBody(
+                    "{ return macosskin.DarkMode.isDark()"
+                  + "    ? new java.awt.Color(82, 89, 99)"
+                  + "    : new java.awt.Color(186, 192, 200); }");
+            writeClass(fu, outDir);
+            System.out.println("[SkinPatch] Flamingo kontur rengi grafite çekildi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: kontur rengi yaması atlandı: " + t);
+        }
+
+        // Grup kutu KENARLIĞI da kalksın: RoundBorder.paintBorder no-op
+        // (insets korunur, yalnız çizim gider; gruplar boşlukla ayrılır).
+        try {
+            CtClass rb = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.ribbon.BasicRibbonBandUI$RoundBorder");
+            rb.getMethod("paintBorder",
+                "(Ljava/awt/Component;Ljava/awt/Graphics;IIII)V")
+                .setBody("{ }");
+            writeClass(rb, outDir);
+            System.out.println("[SkinPatch] Flamingo grup kenarlığı kaldırıldı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: grup kenarlık yaması atlandı: " + t);
+        }
+
+        // Koyu modda ikon aydınlatma: Utils.b(String) ikon yükleyicisinin
+        // dönüşünü IconDarken'dan geçir (apply_icons'un multi-res sarması bu
+        // noktada jar'da; biz onun ÜSTÜNE eklenir). Açık modda no-op.
+        try {
+            CtClass utils = pool.get("tr.com.havelsan.uyap.system.editor.common.Utils");
+            utils.getMethod("b", "(Ljava/lang/String;)Ljavax/swing/ImageIcon;")
+                .insertAfter("{ $_ = macosskin.IconDarken.apply($_); }");
+            utils.getMethod("a", "(Ljava/lang/String;)Ljavax/swing/ImageIcon;")
+                .insertAfter("{ $_ = macosskin.IconDarken.apply($_); }");
+            utils.getMethod("a", "(Ljava/lang/String;I)Ljavax/swing/ImageIcon;")
+                .insertAfter("{ $_ = macosskin.IconDarken.apply($_); }");
+            writeClass(utils, outDir);
+            System.out.println("[SkinPatch] koyu mod ikon aydınlatma eklendi (b, a, a-int).");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: ikon aydınlatma atlandı: " + t);
+        }
+
+        // Orb (uygulama menü düğmesi) arka plan efektini düzleştir: görsel asset
+        // (resources/ude.png) çizilir, arkasındaki degrade/parlama çizimi kalkar.
+        try {
+            CtClass orbUi = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.ribbon.appmenu.BasicRibbonApplicationMenuButtonUI");
+            orbUi.getMethod("paintButtonBackground",
+                "(Ljava/awt/Graphics;Ljava/awt/Rectangle;)V")
+                .setBody("{ }");
+            writeClass(orbUi, outDir);
+            System.out.println("[SkinPatch] Orb arka plan efekti düzleştirildi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: orb arka plan yaması atlandı: " + t);
+        }
     }
 
     private static void writeClass(CtClass cc, File outDir) throws Exception {
