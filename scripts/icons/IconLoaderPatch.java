@@ -1,8 +1,6 @@
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
-import javassist.expr.ExprEditor;
-import javassist.expr.MethodCall;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -13,9 +11,12 @@ import java.io.FileOutputStream;
  *      BaseMultiResolutionImage'a sarar (Retina keskinlik). KRİTİK.
  *   2) com.alee.global.StyleConstants.disabledIconsTransparency = 0.38f
  *      (WebLaF disabled ikon saydamlığı; orijinal 0.7 monokromda yetersiz). best-effort.
- *   3) org...flamingo...FilteredResizableIcon.paintIcon: ekran-çizimini
- *      AlphaComposite 0.38 ile sarar (Flamingo disabled ikonları; bu sınıf
- *      bu jar'da yalnızca disabled ikonlarda kullanılır). best-effort.
+ *   3) org...flamingo...FilteredResizableIcon.paintIcon: gövde tamamen
+ *      değiştirilir -> delegate doğrudan AlphaComposite 0.38 ile çizilir.
+ *      Orijinal yol ikonun 1x rasterini ColorConvertOp(CS_GRAY) ile bozuyordu
+ *      (Retina'da tırtık + ince Fluent çizgilerinde kir); delegate çizimi
+ *      keskinliği ve soluk renkleri korur. Bu sınıf bu jar'da yalnızca
+ *      disabled ikonlarda kullanılır. best-effort.
  *
  * Argümanlar: <editor-app.jar> <out-dir>
  */
@@ -59,30 +60,20 @@ public class IconLoaderPatch {
             System.out.println("[IconLoaderPatch] UYARI: WebLaF disabled transparency yaması atlandı: " + t);
         }
 
-        // --- 3) Flamingo disabled ikon alpha 0.38 (best-effort) ---
+        // --- 3) Flamingo disabled ikon: delegate + alpha 0.38 (best-effort) ---
         try {
             CtClass fri = pool.get("org.pushingpixels.flamingo.api.common.icon.FilteredResizableIcon");
             CtMethod paint = fri.getMethod("paintIcon", "(Ljava/awt/Component;Ljava/awt/Graphics;II)V");
-            paint.instrument(new ExprEditor() {
-                public void edit(MethodCall m) throws javassist.CannotCompileException {
-                    if (m.getMethodName().equals("drawImage")
-                            && m.getSignature().equals("(Ljava/awt/Image;IILjava/awt/image/ImageObserver;)Z")) {
-                        m.replace(
-                            "{ if ($0 instanceof java.awt.Graphics2D) {"
-                          + "    java.awt.Graphics2D g2 = (java.awt.Graphics2D)$0;"
-                          + "    java.awt.Composite __c = g2.getComposite();"
-                          + "    g2.setComposite(java.awt.AlphaComposite.getInstance("
-                          + "        java.awt.AlphaComposite.SRC_OVER, 0.38f));"
-                          + "    $_ = $proceed($$);"
-                          + "    g2.setComposite(__c);"
-                          + "  } else { $_ = $proceed($$); } }");
-                    }
-                }
-            });
+            paint.setBody(
+                "{ java.awt.Graphics2D g2 = (java.awt.Graphics2D) $2.create();"
+              + "  g2.setComposite(java.awt.AlphaComposite.getInstance("
+              + "      java.awt.AlphaComposite.SRC_OVER, 0.38f));"
+              + "  this.delegate.paintIcon($1, g2, $3, $4);"
+              + "  g2.dispose(); }");
             writeClass(fri, outDir);
-            System.out.println("[IconLoaderPatch] Flamingo disabled alpha yaması uygulandı (0.38).");
+            System.out.println("[IconLoaderPatch] Flamingo disabled: delegate+alpha 0.38 yaması uygulandı.");
         } catch (Throwable t) {
-            System.out.println("[IconLoaderPatch] UYARI: Flamingo disabled alpha yaması atlandı: " + t);
+            System.out.println("[IconLoaderPatch] UYARI: Flamingo disabled yaması atlandı: " + t);
         }
     }
 
