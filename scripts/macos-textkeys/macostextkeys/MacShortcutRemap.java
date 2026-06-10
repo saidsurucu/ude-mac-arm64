@@ -27,10 +27,12 @@ package macostextkeys;
  *       gönderilir (Emacs bunlara dokunmaz).
  *
  * Not: Eklenti yıkıcı değildir; mevcut Ctrl kısayolları aynen çalışır (yalnız Cmd
- *   olayları dinlenir). İzin listesi olduğundan Cmd+Q/H/M (çık/gizle/küçült) macOS'a
- *   bırakılır; bunları sistem zaten doğru işler. Cmd+W ise Swing'de varsayılan olarak
- *   hiçbir şeye bağlı değildir → odaktaki pencereye WINDOW_CLOSING gönderilir (UDE'de
- *   "Kapat" menü öğesi yoktur; her belge kendi penceresidir).
+ *   olayları dinlenir). İzin listesi olduğundan Cmd+Q/H (çık/gizle) macOS'a bırakılır;
+ *   bunları sistem zaten doğru işler. Cmd+W ise Swing'de varsayılan olarak hiçbir şeye
+ *   bağlı değildir → odaktaki pencereye WINDOW_CLOSING gönderilir (UDE'de "Kapat" menü
+ *   öğesi yoktur; her belge kendi penceresidir). Cmd+M (küçült) de macOS'a bırakıldığında
+ *   tetiklenmiyordu (uygulamanın kendi global tuş dinleyicisi yutuyor) → olay yakalanıp
+ *   odaktaki Frame doğrudan ICONIFIED yapılır.
  */
 
 import java.awt.Component;
@@ -64,7 +66,7 @@ public final class MacShortcutRemap {
     private static final int REL = META | CTRL | SHIFT | ALT;
 
     /** Menü öğesi bulunamazsa uygulanacak yedek davranış. */
-    private enum Fb { SYNTHETIC, SELECT_ALL, COPY, PASTE, CUT, CLOSE_WINDOW, NONE }
+    private enum Fb { SYNTHETIC, SELECT_ALL, COPY, PASTE, CUT, CLOSE_WINDOW, MINIMIZE, NONE }
 
     /** Bir Cmd kısayolunun ne yapacağını tanımlayan kayıt. */
     private static final class Map {
@@ -121,6 +123,10 @@ public final class MacShortcutRemap {
         //   pencereye WINDOW_CLOSING gönderilir = kırmızı kapat düğmesiyle birebir aynı
         //   (kaydedilmemişse uygulamanın kendi "kaydet?" akışı çalışır). —
         new Map(KeyEvent.VK_W, META,         null,            0, 0, Fb.CLOSE_WINDOW),
+
+        // — Pencereyi küçült (macOS ⌘M). Sistem'e bırakıldığında uygulamanın global
+        //   tuş dinleyicisi olayı yutuyor → odaktaki Frame doğrudan ICONIFIED yapılır. —
+        new Map(KeyEvent.VK_M, META,         null,            0, 0, Fb.MINIMIZE),
 
         // — Yazı tipi paneli (macOS'ta ⌘T kelime işlemcilerde fontu açar) —
         new Map(KeyEvent.VK_T, META,         "Yazı Özellikleri", 0, 0, Fb.NONE),
@@ -310,6 +316,7 @@ public final class MacShortcutRemap {
             case PASTE:      if (c instanceof JTextComponent) ((JTextComponent) c).paste();     break;
             case CUT:        if (c instanceof JTextComponent) ((JTextComponent) c).cut();       break;
             case CLOSE_WINDOW: closeFocusedWindow(c);                                           break;
+            case MINIMIZE:   minimizeFocusedWindow(c);                                          break;
             case SYNTHETIC:  redispatch(c, e.getWhen(), m.dstKey, m.dstMods);                   break;
             case NONE:       /* Emacs gölgesi: yanlış hareket etmektense hiçbir şey yapma */    break;
         }
@@ -331,6 +338,21 @@ public final class MacShortcutRemap {
         if (w == null) w = KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
         if (w == null) return;
         w.dispatchEvent(new WindowEvent(w, WindowEvent.WINDOW_CLOSING));
+    }
+
+    /**
+     * Odaktaki pencereyi Dock'a küçültür: pencere ağacında en yakın Frame'i bulup
+     * ICONIFIED durumuna alır (kullanıcı sarı küçült düğmesine basmış gibi). Frame
+     * olmayan pencerelerde (diyalog vb.) sahibi olan Frame'e tırmanılır.
+     */
+    private static void minimizeFocusedWindow(Component c) {
+        Window w = (c != null) ? SwingUtilities.getWindowAncestor(c) : null;
+        if (w == null) w = KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
+        while (w != null && !(w instanceof Frame)) w = w.getOwner();
+        if (w instanceof Frame) {
+            Frame f = (Frame) w;
+            f.setExtendedState(f.getExtendedState() | Frame.ICONIFIED);
+        }
     }
 
     /** Hedef Ctrl kısayolunu sentetik olarak odaktaki bileşene gönder. */
