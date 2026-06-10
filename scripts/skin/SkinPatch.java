@@ -196,6 +196,53 @@ public class SkinPatch {
             System.out.println("[SkinPatch] UYARI: ikon aydınlatma atlandı: " + t);
         }
 
+        // Sekme alanı Word tarzı: Office-2007'nin tam-genişlik çizgisi ve seçili
+        // sekme konturu kalkar (paintTaskArea no-op); seçili sekme, metin altında
+        // kısa yuvarlak çubukla vurgulanır (koyu: #E7E7E7, açık: koyu gri).
+        try {
+            CtClass ribbonUi = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.ribbon.BasicRibbonUI");
+            ribbonUi.getMethod("paintTaskArea", "(Ljava/awt/Graphics;IIII)V")
+                .setBody("{ }");
+            writeClass(ribbonUi, outDir);
+            System.out.println("[SkinPatch] sekme alanı çizgisi/konturu kaldırıldı.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: sekme alanı yaması atlandı: " + t);
+        }
+        try {
+            CtClass tabUi = pool.get(
+                "org.pushingpixels.flamingo.internal.ui.ribbon.BasicRibbonTaskToggleButtonUI");
+            tabUi.getMethod("paintButtonBackground",
+                "(Ljava/awt/Graphics;Ljava/awt/Rectangle;)V")
+                .setBody(
+                    "{ if (this.commandButton.getActionModel().isSelected()) {"
+                  + "    int __vis = $2.height;"
+                  + "    java.awt.Container __par = this.commandButton.getParent();"
+                  + "    if (__par != null) {"
+                  + "      int __pb = __par.getHeight() - this.commandButton.getY();"
+                  + "      if (__pb > 0 && __pb < __vis) __vis = __pb;"
+                  + "    }"
+                  + "    java.awt.Graphics2D __g = (java.awt.Graphics2D) $1.create();"
+                  + "    __g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,"
+                  + "        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);"
+                  + "    __g.setColor(macosskin.DarkMode.isDark()"
+                  + "        ? new java.awt.Color(231, 231, 231)"
+                  + "        : new java.awt.Color(60, 60, 60));"
+                  + "    int __w = $2.width;"
+                  + "    int __bw = Math.max(18, __w - 26);"
+                  + "    int __bh = 3;"
+                  + "    __g.fillRoundRect($2.x + (__w - __bw) / 2,"
+                  + "        $2.y + __vis - __bh, __bw, __bh, __bh, __bh);"
+                  + "    __g.dispose();"
+                  + "    macosskin.DarkMode.trace(\"tabBar \" + this.commandButton.getText()"
+                  + "        + \" vis=\" + __vis + \" h=\" + $2.height);"
+                  + "  } }");
+            writeClass(tabUi, outDir);
+            System.out.println("[SkinPatch] seçili sekme alt çubuğu eklendi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: sekme alt çubuğu atlandı: " + t);
+        }
+
         // Orb (uygulama menü düğmesi) arka plan efektini düzleştir: görsel asset
         // (resources/ude.png) çizilir, arkasındaki degrade/parlama çizimi kalkar.
         try {
