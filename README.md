@@ -200,6 +200,13 @@ Resmî paket x86_64. Native arm64 için:
     panoda metin de varsa eskisi gibi metin yapışır. Varsayılan açıktır (`PASTEIMG=0` ile
     kapatılır).
 
+12. **Fare ile imaj boyutlandırma** → Belgedeki bir imaja tıkladığınızda köşelerde dört
+    tutamaç belirir; Word'deki gibi bir köşeyi sürükleyerek **oran korumalı** yeniden
+    boyutlandırabilirsiniz. Sürükleme sırasında kesik çizgili önizleme gösterilir; fare
+    bırakıldığında görsel yeni boyutuna oturur. Yeni boyut belgeye yazılır ve UYAP'ın
+    resmî editöründe de aynı şekilde görünür. Tek geri alma adımıyla (`⌘Z`) sıfırlanır.
+    Varsayılan açıktır (`IMGRESIZE=0` ile kapatılır).
+
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
 
