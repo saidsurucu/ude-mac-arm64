@@ -1,6 +1,10 @@
 # Anında etkinleşen otomatik düzeltme seçenekleri — tasarım
 
-**Tarih:** 2026-06-12 · **Dal:** `feature/autocorrect-live-toggle` · **Bayrak:** `AUTOCORRECT=1` (varsayılan açık)
+**Tarih:** 2026-06-12 · **Dal:** `feature/autocorrect-live-toggle` · **Bayrak:** `LIVETOGGLE=1` (varsayılan açık)
+
+> Adlandırma notu: depoda paralel yürüyen "yazarken oto-düzeltme" işi
+> `scripts/macos-autocorrect/` + `apply_autocorrect` adlarını kullanıyor;
+> çakışmamak için bu birim `macos-livetoggle` adını taşır.
 
 ## Sorun
 
@@ -19,11 +23,11 @@ kaydedilir.
 
 ## Çözüm mimarisi
 
-Mevcut build-zamanı yama deseniyle yeni birim: `scripts/macos-autocorrect/` +
-`build.sh` içinde `apply_autocorrect()` (apply_imgresize/apply_pasteimage deseni:
+Mevcut build-zamanı yama deseniyle yeni birim: `scripts/macos-livetoggle/` +
+`build.sh` içinde `apply_livetoggle()` (apply_imgresize/apply_pasteimage deseni:
 helper enjekte → patcher koş → başarısızlıkta helper'ı geri çıkar).
 
-### 1. Helper: `macosautocorrect/LiveToggle.java` (jar'a enjekte, jar'a karşı derlenir)
+### 1. Helper: `macoslivetoggle/LiveToggle.java` (jar'a enjekte, jar'a karşı derlenir)
 
 `public static void apply(String key)` — key ∈ {"ToUpperCase",
 "FirstLetterUpperCase", "SpellCheck"}; EDT'de çağrılır (eylem zaten EDT'de).
@@ -46,7 +50,7 @@ helper enjekte → patcher koş → başarısızlıkta helper'ı geri çıkar).
 
 `fk`'ya DOKUNULMAZ: yeni açılan belgeler tercihi zaten doğru okuyarak kurulur.
 
-### 2. Patcher: `AutoCorrectPatch.java` (Javassist, build'de koşar)
+### 2. Patcher: `LiveTogglePatch.java` (Javassist, build'de koşar)
 
 Üç sınıfın (`dq`, `dA`, `db`) `a(Ljava/awt/event/ActionEvent;)V` metoduna:
 
@@ -59,7 +63,7 @@ helper enjekte → patcher koş → başarısızlıkta helper'ı geri çıkar).
   tıklansın YENİ değeri okur.
 - **ExprEditor (MethodCall)** — `gui.kP.b(...)` restart diyaloğu çağrısı →
   `$_ = 0;` (artık yanlış bilgi; tamamen kaldırılır).
-- **insertAfter** — `macosautocorrect.LiveToggle.apply("<key>");`
+- **insertAfter** — `macoslivetoggle.LiveToggle.apply("<key>");`
 
 Javassist kuralları: gövde string'lerinde `//` yorum yok; sınıf başına tek
 writeClass (frozen tuzağı). Patcher üç sınıftan herhangi birini yamalayamazsa
@@ -67,9 +71,9 @@ sıfır-dışı çıkar → build helper'ı geri çıkarır, uyarı basar, stok 
 
 ### 3. build.sh entegrasyonu
 
-- `AUTOCORRECT_SRC="$SCRIPT_DIR/macos-autocorrect"` + `AUTOCORRECT="${AUTOCORRECT:-1}"`.
-- `apply_autocorrect()` patch_jar zincirine `apply_imgresize`'dan sonra eklenir.
-- İdempotans işareti: jar'da `macosautocorrect/LiveToggle.class` varlığı.
+- `LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle"` + `LIVETOGGLE="${LIVETOGGLE:-1}"`.
+- `apply_livetoggle()` patch_jar zincirine `apply_imgresize`'dan sonra eklenir.
+- İdempotans işareti: jar'da `macoslivetoggle/LiveToggle.class` varlığı.
 
 ## Veri akışı
 
