@@ -740,6 +740,26 @@ public class SkinPatch {
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: grup çerçevesi yaması atlandı: " + t);
         }
+
+        // Substance EDT denetimleri no-op: UDE, bileşenleri arka plan iş
+        // parçacığında kurmaya yaslanır (PDF dışa aktarımı b.b WPDocumentPanel'i
+        // SwingWorker'da üretir; hata diyalogları da worker'dan açılır). Aqua/
+        // WebLaF buna ses çıkarmaz; Substance UiThreadingViolationException
+        // fırlatır, UIDefaults.getUI bunu yutup null UI bırakır → PDF dönüşümü
+        // NPE ile 0 bayt üretir, hata diyaloğu 80x29 boş modal pencere olarak
+        // kalır ve spinner sonsuza dek döner. Denetimler boşaltılarak Substance,
+        // UDE'nin yazıldığı gevşek LAF davranışına çekilir.
+        CtClass scu = pool.get("org.jvnet.substance.utils.SubstanceCoreUtilities");
+        scu.getMethod("testComponentCreationThreadingViolation",
+            "(Ljava/awt/Component;)V").setBody("{ }");
+        scu.getMethod("testComponentStateChangeThreadingViolation",
+            "(Ljava/awt/Component;)V").setBody("{ }");
+        writeClass(scu, outDir);
+        CtClass lwu = pool.get("org.jvnet.lafwidget.LafWidgetUtilities");
+        lwu.getMethod("testComponentStateChangeThreadingViolation",
+            "(Ljava/awt/Component;)V").setBody("{ }");
+        writeClass(lwu, outDir);
+        System.out.println("[SkinPatch] Substance EDT denetimleri no-op (PDF dışa aktarım düzeltmesi).");
     }
 
     private static void writeClass(CtClass cc, File outDir) throws Exception {
