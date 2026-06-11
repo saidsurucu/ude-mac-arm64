@@ -42,6 +42,7 @@ IMG_SRC="$SCRIPT_DIR/macos-imagefull"   # satır-içi imaj tam-çözünürlük (
 SKIN_SRC="$SCRIPT_DIR/skin"             # modern düz skin + Flamingo şerit paint yaması
 PASTE_SRC="$SCRIPT_DIR/macos-pasteimage" # panodan imaj yapıştırma (macOS cast) yaması
 RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
+LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle" # otomatik düzeltme seçenekleri anında etkin
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
@@ -50,6 +51,7 @@ IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük
 PASTEIMG="${PASTEIMG:-1}" # 1=açık (varsayılan; panodan imaj yapıştırma macOS düzeltmesi) | 0=kapalı
 IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçlarıyla boyutlandırma) | 0=kapalı
 SKIN="${SKIN:-1}"       # 1=açık (varsayılan; modern düz Substance skin + Flamingo şerit + font + teal arka plan nötr gri) | 0=kapalı
+LIVETOGGLE="${LIVETOGGLE:-1}" # 1=açık (varsayılan; Otomatik Büyük Harf vb. toggle'lar restart'sız etkin) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -499,6 +501,39 @@ apply_imgresize() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[imgresize] fare ile imaj boyutlandırma yaması uygulandı."
 }
 
+apply_livetoggle() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$LIVETOGGLE" = "1" ] || return 0
+	# İdempotans: helper zaten enjekte edilmişse atla.
+	# grep -q DEĞİL (SIGPIPE/pipefail tuzağı): grep tüm girdiyi okuyup >/dev/null'a yazar.
+	if unzip -l "$JAR" 2>/dev/null | grep 'macoslivetoggle/LiveToggle.class' >/dev/null 2>&1; then
+		c_ok "[livetoggle] zaten yamalı, atlandı."; return 0
+	fi
+	c_info "[livetoggle] otomatik düzeltme seçenekleri anında-etkin yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[livetoggle] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[livetoggle] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
+	# 1) helper'ı derle + jar'a enjekte et (patcher'dan ÖNCE; insertBefore/After
+	#    derlemesi LiveToggle'ı jar classpath'inden çözer)
+	rm -rf "$BUILD/_ltghelper"; mkdir -p "$BUILD/_ltghelper"
+	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_ltghelper" "$LIVETOGGLE_SRC/macoslivetoggle/LiveToggle.java" \
+		|| { c_warn "[livetoggle] LiveToggle derlenemedi; yama atlandı."; return 0; }
+	( cd "$BUILD/_ltghelper" && zip -q -r "$JAR" macoslivetoggle )
+	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
+	rm -rf "$BUILD/_ltgpatch"; mkdir -p "$BUILD/_ltgpatch/out"
+	"$jc" --release 11 -encoding UTF-8 -cp "$jvs" -d "$BUILD/_ltgpatch" "$LIVETOGGLE_SRC/LiveTogglePatch.java" \
+		|| { c_warn "[livetoggle] LiveTogglePatch derlenemedi; yama atlandı."; return 0; }
+	if ! "$jr" -cp "$BUILD/_ltgpatch:$jvs" LiveTogglePatch "$JAR" "$BUILD/_ltgpatch/out"; then
+		# Yarım-yama bırakma: helper'ı geri çıkar ki idempotans kontrolü yanılmasın.
+		zip -q -d "$JAR" 'macoslivetoggle/*' >/dev/null 2>&1 || true
+		c_warn "[livetoggle] toggle yaması uygulanamadı (UDE sürümü değişmiş olabilir); yama geri alındı."
+		return 0
+	fi
+	( cd "$BUILD/_ltgpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[livetoggle] seçenekler artık anında etkin (restart gerekmez)."
+}
+
 apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$SKIN" = "1" ] || return 0
@@ -568,6 +603,7 @@ patch_jar() {
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
 	apply_imgresize "$JAR"
+	apply_livetoggle "$JAR"
 	apply_skin "$JAR"
 	unzip -l "$JAR" | grep "Mac/$SQLITE_ARCH/libsqlitejdbc.dylib" >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
@@ -735,6 +771,9 @@ Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözül
                  tutamaçlarıyla fare ile boyutlandırma — Word benzeri)
        SKIN (1=açık varsayılan | 0=kapalı; modern düz Substance skin + Flamingo
                  şerit + font + nötr kanvas; macOS koyu görünümde koyu tema)
+       LIVETOGGLE (1=açık varsayılan | 0=kapalı; Otomatik Büyük Harf / Baş
+                 Harfler Büyük / Kelime Denetimi toggle'ları restart'sız anında
+                 etkinleşir, "yeniden başlat" diyaloğu kalkar)
 EOF
 }
 
@@ -745,6 +784,7 @@ case "${1:-all}" in
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-resize) apply_imgresize "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	live-toggle) apply_livetoggle "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	skin) SKIN=1 apply_skin "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	package) package ;; sign) sign ;; dmg) dmg ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
