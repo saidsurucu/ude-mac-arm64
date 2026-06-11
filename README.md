@@ -85,8 +85,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64
 Intel'de resmî UDE paketi zaten x86_64 olduğu için burada kazanç "Rosetta'sız native hız"
 **değildir**; kazanç şunlardır: **Java 11 ile Retina'da keskin metin**, **modern Material
 ikonlar**, **Mac klavye kısayolları**, **native macOS Aç/Kaydet pencereleri**, **trackpad /
-⌘ ile yakınlaştırma**, **e-imza (akıllı kart) düzeltmesi**, **panodan görsel yapıştırma**
-ve **PDF dışa aktarımında Türkçe harfler**. Yani mimariye bağlı olmayan tüm iyileştirmeler
+⌘ ile yakınlaştırma**, **e-imza (akıllı kart) düzeltmesi**, **panodan görsel yapıştırma**,
+**macOS dikte düzeltmesi** ve **PDF dışa aktarımında Türkçe harfler**. Yani mimariye bağlı olmayan tüm iyileştirmeler
 Intel'de de geçerlidir.
 
 ### E-imza kullanacaksanız — AKİS sürücüsü (zorunlu)
@@ -215,6 +215,14 @@ Resmî paket x86_64. Native arm64 için:
     bırakıldığında görsel yeni boyutuna oturur. Yeni boyut belgeye yazılır ve UYAP'ın
     resmî editöründe de aynı şekilde görünür. Tek geri alma adımıyla (`⌘Z`) sıfırlanır.
     Varsayılan açıktır (`IMGRESIZE=0` ile kapatılır).
+13. **macOS dikte düzeltmesi** → Resmî pakette dikte konuşurken yazıyor ama dikte
+    kapanınca yazılan metin **kayboluyor**, ardından uygulama donup zorla kapatma
+    gerektiriyordu (yeniden açılışta "düz metin olarak kurtar" uyarısı). Kök neden:
+    Java, dikteyle gelen metni tuş basımı gibi işlerken editörün kelime denetimi
+    geçici imleç tipine takılıp çöküyordu. Bu derlemede metin bileşenlerine eklenen
+    küçük bir dinleyiciyle dikte metni editörün normal yazma yolundan işlenir;
+    dikte edilen metin kalıcıdır, donma olmaz. Şapkalı harfler (`^`+a → â) ve
+    emoji seçici (⌃⌘Space) etkilenmez.
 
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
