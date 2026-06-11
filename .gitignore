@@ -22,3 +22,9 @@
 
 # brainstorming / tasarım dokümanları (yerel)
 /docs/
+
+# brainstorming görsel companion (yerel mockup'lar)
+/.superpowers/
+
+# fluent ikon SVG cache (yerel)
+/scripts/icons/fluent/cache/

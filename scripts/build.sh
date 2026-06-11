@@ -43,7 +43,7 @@ SKIN_SRC="$SCRIPT_DIR/skin"             # modern düz skin + Flamingo şerit pai
 PASTE_SRC="$SCRIPT_DIR/macos-pasteimage" # panodan imaj yapıştırma (macOS cast) yaması
 RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
-ICONS="${ICONS:-}"            # boş=kapalı | 1=modern ikon override + HiDPI yükleyici yaması
+ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
 FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencereleri) | 0=kapalı
 IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük (bulanıklık) yaması
@@ -269,9 +269,19 @@ zoom() {
 	c_ok "macos-zoom derlendi ($(find "$BUILD/_zoom" -name '*.class' | wc -l | tr -d ' ') sınıf)"
 }
 
+lookagent() {  # SKIN=1 görünüm agent'ı: bütünleşik başlık çubuğu + durum çubuğu temizliği
+	[ "$SKIN" = "1" ] || { c_info "[lookagent] SKIN=0, atlandı."; rm -rf "$BUILD/_lookagent"; return 0; }
+	c_info "macOS görünüm javaagent'ı derleniyor (bütünleşik başlık + WebMemoryBar)…"
+	local jc; jc="$(javac17)" || die "Derleyici (jpackage JDK) yok → scripts/build.sh jpackage-jdk"
+	rm -rf "$BUILD/_lookagent"; mkdir -p "$BUILD/_lookagent"
+	"$jc" --release 11 -d "$BUILD/_lookagent" "$SKIN_SRC/agent/macoslook/MacLook.java" \
+		|| die "macoslook derlenemedi."
+	c_ok "macoslook derlendi."
+}
+
 apply_icons() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
-	[ -z "$ICONS" ] && return 0
+	[ "$ICONS" = "1" ] || return 0
 	c_info "[icons] modern ikon override + HiDPI yükleyici yaması…"
 	# 1) override asset'leri jar'a enjekte et (UDE resource yoluyla)
 	if [ -d "$ICONS_SRC/overrides" ] && [ -n "$(find "$ICONS_SRC/overrides" -type f ! -name '.*' 2>/dev/null)" ]; then
@@ -496,11 +506,22 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	# 1) FlatUdeSkin'i jar'a karşı derle + enjekte et (patcher'dan ÖNCE)
 	rm -rf "$BUILD/_skinhelper"; mkdir -p "$BUILD/_skinhelper"
 	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_skinhelper" \
-		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatFontPolicy.java" \
+		"$SKIN_SRC/macosskin/DarkMode.java" "$SKIN_SRC/macosskin/IconDarken.java" \
+		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatUdeDarkSkin.java" \
+		"$SKIN_SRC/macosskin/FlatFontPolicy.java" \
+		"$SKIN_SRC/macosskin/WordTooltip.java" \
+		"$SKIN_SRC/macosskin/WordCombo.java" \
+		"$SKIN_SRC/macosskin/PopupRemap.java" \
+		"$SKIN_SRC/macosskin/MenuMarks.java" \
+		"$SKIN_SRC/macosskin/WordCheck.java" \
+		"$SKIN_SRC/macosskin/DarkPage.java" \
 		|| { c_warn "[skin] skin helper'ları derlenemedi; yama atlandı."; return 0; }
-	# colorschemes resource'unu (varsa) helper ağacına kopyala (Task 3'te oluşur)
+	# colorschemes resource'larını helper ağacına kopyala
 	if [ -f "$SKIN_SRC/macosskin/flatude.colorschemes" ]; then
 		cp "$SKIN_SRC/macosskin/flatude.colorschemes" "$BUILD/_skinhelper/macosskin/"
+	fi
+	if [ -f "$SKIN_SRC/macosskin/flatude-dark.colorschemes" ]; then
+		cp "$SKIN_SRC/macosskin/flatude-dark.colorschemes" "$BUILD/_skinhelper/macosskin/"
 	fi
 	( cd "$BUILD/_skinhelper" && zip -q -r "$JAR" macosskin )
 	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
@@ -566,6 +587,15 @@ package() {
 	( cd "$BUILD/_textkeys" && "$(dirname "$jp")/jar" cfm "$in/macos-textkeys.jar" MANIFEST.MF macostextkeys )
 	printf 'Premain-Class: macoszoom.MacZoom\nAgent-Class: macoszoom.MacZoom\n' > "$BUILD/_zoom/MANIFEST.MF"
 	( cd "$BUILD/_zoom" && "$(dirname "$jp")/jar" cfm "$in/macos-zoom.jar" MANIFEST.MF macoszoom )
+	# SKIN=1 görünüm agent'ı (bütünleşik başlık + WebMemoryBar); SKIN=0'da jar üretilmez,
+	# -javaagent satırı da eklenmez (eksik jar'da JVM hiç başlamaz).
+	local lookopts=()
+	if [ -d "$BUILD/_lookagent/macoslook" ]; then
+		printf 'Premain-Class: macoslook.MacLook\nAgent-Class: macoslook.MacLook\n' > "$BUILD/_lookagent/MANIFEST.MF"
+		( cd "$BUILD/_lookagent" && "$(dirname "$jp")/jar" cfm "$in/macos-look.jar" MANIFEST.MF macoslook )
+		lookopts=(--java-options '-javaagent:$APPDIR/macos-look.jar' \
+			--java-options '-Dapple.awt.application.appearance=system')
+	fi
 	local icns; icns="$(ls "$SRC_APP_DIR/app/Contents/Resources/"*.icns 2>/dev/null | head -1)"
 	local ude_ver; ude_ver="$(plutil -extract CFBundleVersion raw "$SRC_APP_DIR/app/Contents/Info.plist" 2>/dev/null || echo 1.0)"
 	local assoc="$BUILD/_udf.properties"
@@ -583,6 +613,7 @@ package() {
 		--java-options '--add-opens=java.desktop/com.apple.eawt=ALL-UNNAMED' \
 		--java-options '-javaagent:$APPDIR/macos-textkeys.jar' \
 		--java-options '-javaagent:$APPDIR/macos-zoom.jar' \
+		${lookopts[@]+"${lookopts[@]}"} \
 		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC' \
 		--java-options -Xms128M --java-options -Xmx4096M \
 		--java-options -XX:+UnlockExperimentalVMOptions \
@@ -648,7 +679,7 @@ dmg() {
 
 all() {
 	check_deps || die "Ön koşul eksik (jdk / jpackage-jdk)."
-	download; deps; shim; textkeys; zoom; patch_jar; package; sign
+	download; deps; shim; textkeys; zoom; lookagent; patch_jar; package; sign
 	echo
 	c_ok "BİTTİ → $APP"
 	c_info "Çalıştır: open \"$APP\"   |   Kur: /Applications'a sürükle (çift-tık ile .udf açılır, Retina'da keskin)"
@@ -680,7 +711,7 @@ Hedefler:
 
 Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözülür)
        UDE_DOWNLOAD_PAGE / UDE_ZIP (kaynak), SQLITE_VER (vars: $SQLITE_VER)
-       ICONS (boş|1; modern ikon override + HiDPI yükleyici yaması)
+       ICONS (1=açık varsayılan | 0=kapalı; modern ikon override + HiDPI yükleyici yaması)
        FOPFONTS (1=açık varsayılan | 0=kapalı; PDF dışa aktarımda Türkçe harf
                  düzeltmesi — FOP'a gömülü macOS Arial/Times fontları tanıtılır)
        PASTEIMG (1=açık varsayılan | 0=kapalı; panodan imaj yapıştırma — macOS'ta
@@ -688,13 +719,13 @@ Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözül
        IMGRESIZE (1=açık varsayılan | 0=kapalı; satır-içi imajı köşe
                  tutamaçlarıyla fare ile boyutlandırma — Word benzeri)
        SKIN (1=açık varsayılan | 0=kapalı; modern düz Substance skin + Flamingo
-                 şerit + font + teal masaüstü arka planını nötr griye çevirir)
+                 şerit + font + nötr kanvas; macOS koyu görünümde koyu tema)
 EOF
 }
 
 case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
-	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; patch) patch_jar ;;
+	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; lookagent) lookagent ;; patch) patch_jar ;;
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;

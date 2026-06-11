@@ -184,9 +184,18 @@ Resmî paket x86_64. Native arm64 için:
    gerçek macOS kısayollarına dokunulmaz.
 
 10. **Modern düz görünüm** (`SKIN=1`, varsayılan açık) → Menüler, paneller, şerit ve durum
-    çubuğu degradesiz nötr açık renklere geçer; arayüz yazı tipi modernleşir; belge
-    çevresindeki eski turkuaz arka plan nötr griye düzeltilir. Şerit düzeni ve belge içeriği
-    değişmez. Kapatmak için `SKIN=0 make all`.
+    çubuğu degradesiz nötr renklere geçer; arayüz yazı tipi modernleşir; belge çevresindeki
+    eski turkuaz arka plan nötr griye düzeltilir. Şerit düzeni ve belge içeriği değişmez.
+    Ek olarak:
+    - **Koyu mod**: Mac'iniz koyu görünümdeyse UDE de koyu temayla açılır (belge sayfası
+      okunabilirlik için beyaz kalır). Görünümü değiştirdikten sonra uygulamayı yeniden
+      başlatmanız yeterlidir.
+    - **Bütünleşik başlık çubuğu**: Çifte başlık kalkar; şerit, modern Mac uygulamalarındaki
+      gibi pencerenin tepesiyle kaynaşır. Durum çubuğundaki bellek göstergesi kaldırılır.
+    - **Sade şerit**: "Pano/Font/Paragraf" grup kutuları ve eski kırmızı küre logosu yerine
+      sade gruplar ve düz grafit UDE simgesi kullanılır.
+    - Görünüm açılışta garanti kurulur; UDE'nin tema ayarındaki "standart tema" seçeneğinin
+      tercihi silmesinden etkilenmez. Kapatmak için `SKIN=0 make all`.
 
 11. **Panodan görsel yapıştırma** → Panoda bir görsel varken (ekran görüntüsü, tarayıcıdan
     "görseli kopyala") Yapıştır/⌘V macOS'ta hiçbir şey yapmıyordu: macOS Java'sı pano
