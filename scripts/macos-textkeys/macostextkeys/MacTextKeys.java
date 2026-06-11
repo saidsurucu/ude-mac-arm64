@@ -74,6 +74,9 @@ public final class MacTextKeys {
         MacTooltips.install();
         // Dikte/IME teşhisi (UDE_DICTLOG=1 ile etkin; aksi halde no-op).
         DictationProbe.install();
+        // Dikte düzeltmesi: no-op InputMethodListener → sentetik keyTyped kapanır,
+        // commit kit'in normal yazma aksiyonundan akar (metin kaybı + donma biter).
+        DictationFix.install();
         try {
             Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
                 @Override public void eventDispatched(AWTEvent e) {
