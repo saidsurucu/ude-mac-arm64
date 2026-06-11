@@ -6,12 +6,15 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.awt.geom.Path2D;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JTextField;
+import javax.swing.ListModel;
 import javax.swing.LookAndFeel;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
@@ -154,6 +157,73 @@ public final class WordCombo {
                     tf.setCaretColor(text());
                 }
             }
+        }
+
+        private String typeBuf = "";
+        private long typeLast;
+
+        /* Popup açıkken harf yazmak seçimi COMMIT EDEMEZ: UDE'nin combo
+         * listener'ları (örn. font ailesi: gui.iv) seçim değişir değişmez
+         * niteliği uygular ve requestFocusInWindow ile odağı editöre taşır,
+         * odak kaybı da popup'ı kapatır — "c yazınca C059 seçilip liste
+         * kapanıyor" hatasının kökü. Bu yüzden Basic'in selectWithKeyChar
+         * yolu popup açıkken atlanır; biriken önek yalnız listedeki vurguyu
+         * taşır, seçim Enter ya da tıkla kesinleşir. */
+        protected KeyListener createKeyListener() {
+            final KeyListener base = super.createKeyListener();
+            return new KeyListener() {
+                public void keyTyped(KeyEvent e) { base.keyTyped(e); }
+                public void keyReleased(KeyEvent e) { base.keyReleased(e); }
+                public void keyPressed(KeyEvent e) {
+                    if (handleTypeAhead(e)) { e.consume(); return; }
+                    base.keyPressed(e);
+                }
+            };
+        }
+
+        boolean handleTypeAhead(KeyEvent e) {
+            if (comboBox == null || comboBox.isEditable()
+                    || !comboBox.isEnabled() || !comboBox.isPopupVisible()) {
+                return false;
+            }
+            if (e.isMetaDown() || e.isControlDown() || e.isAltDown()) {
+                return false;
+            }
+            char ch = e.getKeyChar();
+            if (ch == KeyEvent.CHAR_UNDEFINED || ch < ' ' || ch == 127) {
+                return false;
+            }
+            long factor = 1000L;
+            Object tf = UIManager.get("ComboBox.timeFactor");
+            if (tf instanceof Number) {
+                factor = ((Number) tf).longValue();
+            }
+            typeBuf = nextBuffer(typeBuf, ch, e.getWhen() - typeLast, factor);
+            typeLast = e.getWhen();
+            int i = findPrefixMatch(comboBox.getModel(), typeBuf);
+            if (i >= 0 && listBox != null) {
+                listBox.setSelectedIndex(i);
+                listBox.ensureIndexIsVisible(i);
+            }
+            return true;
+        }
+
+        static String nextBuffer(String buf, char ch, long elapsed, long factor) {
+            return (elapsed > factor ? "" : buf) + ch;
+        }
+
+        static int findPrefixMatch(ListModel<?> m, String prefix) {
+            if (prefix.isEmpty()) {
+                return -1;
+            }
+            for (int i = 0; i < m.getSize(); i++) {
+                Object o = m.getElementAt(i);
+                String s = o == null ? null : o.toString();
+                if (s != null && s.regionMatches(true, 0, prefix, 0, prefix.length())) {
+                    return i;
+                }
+            }
+            return -1;
         }
     }
 }
