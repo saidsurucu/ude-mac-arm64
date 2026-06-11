@@ -22,6 +22,9 @@ package macostextkeys;
  *       ağacında etiketle eşleşen etkin JMenuItem bulunur ve doClick() edilir. Bu,
  *       uygulamanın GERÇEK eylemini (zengin-metin yapıştırma vb.) çağırır ve odak
  *       bileşenini kullanmadığından Emacs gölgesini tamamen baypas eder.
+ *       İSTİSNA: odak editör DIŞI bir metin alanındaysa (arama kutusu, e-imza
+ *       formu…) menü eylemi yanlış hedefe (editöre) işler → pano/seçim komutu
+ *       doğrudan odaktaki alana uygulanır (performLocal/isEditor).
  *     • Menüde OLMAYAN biçimlendirme (kalın/italik/altı çizili): uygulamanın kendi
  *       Ctrl tuşlarını ezdiği komutlar olduğundan, odaktaki bileşene sentetik Ctrl
  *       gönderilir (Emacs bunlara dokunmaz).
@@ -303,6 +306,13 @@ public final class MacShortcutRemap {
     private static void perform(Map m, KeyEvent e) {
         Component c = focusOwner(e);
 
+        // 0) Odak, editör DIŞI bir metin alanındaysa (şerit arama kutusu, e-imza
+        //    formu girdileri vb.) pano/seçim komutları menüye GİTMEZ: menüdeki
+        //    Yapıştır/Kopyala/Kes/Tümünü Seç eylemleri odaktan bağımsız her zaman
+        //    EDITÖR belgesine işler; doğru hedef odaktaki alanın kendisidir.
+        if (c instanceof JTextComponent && !isEditor(c)
+                && performLocal(m.fb, (JTextComponent) c)) return;
+
         // 1) Menüde karşılığı varsa uygulamanın gerçek eylemini çağır.
         if (m.label != null) {
             JMenuItem mi = findMenuItem(m.label, c);
@@ -320,6 +330,33 @@ public final class MacShortcutRemap {
             case SYNTHETIC:  redispatch(c, e.getWhen(), m.dstKey, m.dstMods);                   break;
             case NONE:       /* Emacs gölgesi: yanlış hareket etmektense hiçbir şey yapma */    break;
         }
+    }
+
+    /** Pano/seçim komutunu doğrudan odaktaki alana uygula; uygulanamadıysa false. */
+    private static boolean performLocal(Fb fb, JTextComponent tc) {
+        switch (fb) {
+            case SELECT_ALL: tc.selectAll(); return true;
+            case COPY:       tc.copy();      return true;
+            case PASTE: if (tc.isEditable() && tc.isEnabled()) { tc.paste(); return true; } return false;
+            case CUT:   if (tc.isEditable() && tc.isEnabled()) { tc.cut();   return true; } return false;
+            default: return false;
+        }
+    }
+
+    /**
+     * UDE belge editörü mü? Editör zinciri: text.t → fi → hj → wp.prof.b.c →
+     * wp.a.f → JTextPane; wp.a.f UDE'nin zengin-metin tabanıdır. Editörde pano
+     * komutları menü eyleminden (zengin-metin yapıştırma) akmalı, düz
+     * JTextComponent.paste() biçimlendirmeyi kaybeder. Sınıf adıyla bakılır
+     * (agent jar uygulama sınıflarına classpath'siz derlenir).
+     */
+    private static boolean isEditor(Component c) {
+        for (Class<?> k = c.getClass(); k != null; k = k.getSuperclass()) {
+            String n = k.getName();
+            if (n.equals("tr.com.havelsan.uyap.system.swing.wp.a.f")
+                    || n.equals("tr.com.havelsan.uyap.system.editor.common.text.hj")) return true;
+        }
+        return false;
     }
 
     private static Component focusOwner(KeyEvent e) {
