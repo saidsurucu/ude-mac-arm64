@@ -507,6 +507,8 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	rm -rf "$BUILD/_skinhelper"; mkdir -p "$BUILD/_skinhelper"
 	"$jc" --release 11 -cp "$JAR" -d "$BUILD/_skinhelper" \
 		"$SKIN_SRC/macosskin/DarkMode.java" "$SKIN_SRC/macosskin/IconDarken.java" \
+		"$SKIN_SRC/macosskin/ModeAwareImage.java" \
+		"$SKIN_SRC/macosskin/ModeSwitch.java" \
 		"$SKIN_SRC/macosskin/FlatUdeSkin.java" "$SKIN_SRC/macosskin/FlatUdeDarkSkin.java" \
 		"$SKIN_SRC/macosskin/FlatFontPolicy.java" \
 		"$SKIN_SRC/macosskin/WordTooltip.java" \

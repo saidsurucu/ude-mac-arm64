@@ -60,11 +60,13 @@ public final class MacLook {
                     JFrame f = (JFrame) src;
                     SwingUtilities.invokeLater(() -> {
                         try { unifyTitleBar(f); } catch (Throwable t) { log("titlebar: " + t); }
+                        try { hookTitle(f); } catch (Throwable t) { log("titlehook: " + t); }
                         try { removeMemoryBar(f); } catch (Throwable t) { log("membar: " + t); }
                         try { fixRulerBackground(f); } catch (Throwable t) { log("ruler: " + t); }
                         try { boldTaskTabs(f); } catch (Throwable t) { log("tabfont: " + t); }
                         try { removeScopeCombo(f); } catch (Throwable t) { log("scopecombo: " + t); }
                         try { addDarkPageToggle(f); } catch (Throwable t) { log("darkpage: " + t); }
+                        try { addColorModeCombo(f); } catch (Throwable t) { log("colormode: " + t); }
                     });
                 }
             }, AWTEvent.WINDOW_EVENT_MASK);
@@ -95,6 +97,51 @@ public final class MacLook {
         root.revalidate();
         f.repaint();
         log("titlebar bütünleşti: " + f.getTitle());
+    }
+
+    /** Yerel macOS başlık METNİ şeffaf başlık çubuğunda da çizilir; macOS onu
+     *  pencere genişliğine göre ortalar/kaydırır ve dar pencerede hızlı erişim
+     *  ikonlarının ÜSTÜNE düşürür (UDE'nin başlığa eklediği ~100 boşlukluk
+     *  sağa-itme dolgusu yalnız geniş pencerede tutar; Zulu 11 AWT'de
+     *  NSWindow.titleVisibility erişimi yok). Çözüm: gerçek başlık temizlenip
+     *  rootpane'e saklanır — SkinPatch'in TaskbarPanel.paintComponent yaması
+     *  onu ikonlarla çakışmadan çizer — yerel başlık tek boşluğa indirilir.
+     *  UDE her belge değişiminde setTitle'ı yeniler; "title" property
+     *  dinleyicisi süreci tekrarlar (boş/boşluk değerler döngüyü keser). */
+    private static void hookTitle(JFrame f) {
+        Component ribbon = findByClassName(f, "JRibbon");
+        if (ribbon == null) return;
+        JComponent root = f.getRootPane();
+        if (Boolean.TRUE.equals(root.getClientProperty("macoslook.titlehook"))) return;
+        root.putClientProperty("macoslook.titlehook", Boolean.TRUE);
+        f.addPropertyChangeListener("title", ev -> {
+            Object nv = ev.getNewValue();
+            if (nv != null) {
+                try { applyTitle(f, nv.toString()); }
+                catch (Throwable t) { log("titlehook değişim: " + t); }
+            }
+        });
+        applyTitle(f, f.getTitle());
+        log("titlehook kuruldu");
+    }
+
+    private static void applyTitle(JFrame f, String raw) {
+        if (raw == null) return;
+        String clean = raw.trim();
+        if (clean.isEmpty()) return;
+        int p = clean.lastIndexOf(" (");
+        if (p > 0 && clean.endsWith(")") && clean.indexOf('/', p) > p) {
+            clean = clean.substring(0, p);
+        }
+        int d = clean.indexOf(" - ");
+        if (d > 0 && d + 3 < clean.length()) {
+            clean = clean.substring(d + 3);
+        }
+        f.getRootPane().putClientProperty("macoslook.title", clean);
+        f.setTitle(" ");
+        Component ribbon = findByClassName(f, "JRibbon");
+        if (ribbon != null) ribbon.repaint();
+        log("başlık devralındı: " + clean);
     }
 
     private static void removeMemoryBar(JFrame f) {
@@ -221,6 +268,83 @@ public final class MacLook {
         targetBand.getClass().getMethod("addRibbonComponent", jrcCls).invoke(targetBand, jrc);
         r.putClientProperty("macoslook.darkpage", Boolean.TRUE);
         log("darkpage: onay kutusu eklendi");
+    }
+
+    /** Görünüm sekmesine, koyu belge onay kutusunun altına "Renk modu"
+     *  açılır listesi ekler (Açık/Koyu/Sistem; varsayılan Sistem). Tercih
+     *  macosskin.DarkMode'da prefs ile kalıcı; seçim macosskin.ModeSwitch
+     *  ile ANINDA uygulanır (skin + delegate + kanvas + cetvel + ağaç
+     *  güncellemesi; ikonlar ModeAwareImage ile kendiliğinden uyar). Band,
+     *  addDarkPageToggle ile aynı yolla ribbon MODELİNDEN bulunur; her şey
+     *  yansımayla. */
+    private static void addColorModeCombo(JFrame f) throws Exception {
+        Component ribbon = findByClassName(f, "JRibbon");
+        if (ribbon == null) return;
+        JComponent r = (JComponent) ribbon;
+        if (Boolean.TRUE.equals(r.getClientProperty("macoslook.colormode"))) return;
+
+        Class<?> dm;
+        try {
+            dm = Class.forName("macosskin.DarkMode");
+        } catch (ClassNotFoundException e) { log("colormode: DarkMode sınıfı yok"); return; }
+
+        Object targetBand = null;
+        int taskCount = (Integer) ribbon.getClass().getMethod("getTaskCount").invoke(ribbon);
+        for (int i = 0; i < taskCount && targetBand == null; i++) {
+            Object task = ribbon.getClass().getMethod("getTask", int.class).invoke(ribbon, i);
+            java.util.List<?> bands = (java.util.List<?>)
+                task.getClass().getMethod("getBands").invoke(task);
+            for (Object band : bands) {
+                Component cp = (Component)
+                    band.getClass().getMethod("getControlPanel").invoke(band);
+                if (cp != null && findCheckBox(cp, "Klasik görünüme geç") != null) {
+                    targetBand = band;
+                    break;
+                }
+            }
+        }
+        if (targetBand == null) { log("colormode: hedef band bulunamadı"); return; }
+
+        final String[] modes = { "light", "dark", "system" };
+        final String[] labels = { "Açık", "Koyu", "Sistem" };
+        final javax.swing.JComboBox<String> combo = new javax.swing.JComboBox<>(labels);
+        String cur = (String) dm.getMethod("getMode").invoke(null);
+        int sel = 2;
+        for (int i = 0; i < modes.length; i++) if (modes[i].equals(cur)) sel = i;
+        combo.setSelectedIndex(sel);
+        combo.setToolTipText("Açık, koyu ya da sistem görünümü");
+        final java.lang.reflect.Method applyMode =
+            Class.forName("macosskin.ModeSwitch").getMethod("apply", String.class);
+        combo.addActionListener(e -> {
+            try {
+                int i = combo.getSelectedIndex();
+                if (i < 0) return;
+                String prev = (String) dm.getMethod("getMode").invoke(null);
+                if (DEBUG) {
+                    StringBuilder sb = new StringBuilder(
+                        "colormode action i=" + i + " prev=" + prev + " stack=");
+                    for (StackTraceElement s : Thread.currentThread().getStackTrace()) {
+                        sb.append("\n    ").append(s);
+                    }
+                    log(sb.toString());
+                }
+                if (modes[i].equals(prev)) return;
+                applyMode.invoke(null, modes[i]);
+            } catch (Throwable t) { log("colormode seçim: " + t); }
+        });
+
+        javax.swing.JPanel row = new javax.swing.JPanel(
+            new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+        row.setOpaque(false);
+        javax.swing.JLabel lbl = new javax.swing.JLabel("Renk modu:");
+        row.add(lbl);
+        row.add(combo);
+
+        Class<?> jrcCls = Class.forName("org.pushingpixels.flamingo.api.ribbon.JRibbonComponent");
+        Object jrc = jrcCls.getConstructor(JComponent.class).newInstance(row);
+        targetBand.getClass().getMethod("addRibbonComponent", jrcCls).invoke(targetBand, jrc);
+        r.putClientProperty("macoslook.colormode", Boolean.TRUE);
+        log("colormode: açılır liste eklendi (seçili=" + cur + ")");
     }
 
     private static javax.swing.JCheckBox findCheckBox(Component c, String text) {
