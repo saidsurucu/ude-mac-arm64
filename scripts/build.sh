@@ -584,7 +584,11 @@ package() {
 		--java-options '-javaagent:$APPDIR/macos-textkeys.jar' \
 		--java-options '-javaagent:$APPDIR/macos-zoom.jar' \
 		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC' \
-		--java-options -Xms512M --java-options -Xmx4096M \
+		--java-options -Xms128M --java-options -Xmx4096M \
+		--java-options -XX:+UnlockExperimentalVMOptions \
+		--java-options -XX:+UseShenandoahGC \
+		--java-options -XX:ShenandoahUncommitDelay=10000 \
+		--java-options -XX:ShenandoahGuaranteedGCInterval=120000 \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
 		${icns:+--icon "$icns"} \
 		--mac-package-identifier "$BUNDLE_ID" --file-associations "$assoc" \
