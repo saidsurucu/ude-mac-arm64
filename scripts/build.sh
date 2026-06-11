@@ -258,6 +258,13 @@ textkeys() {
 	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_textkeys" $(find "$TEXTKEYS_SRC" -name '*.java') \
 		|| die "macos-textkeys derlenemedi."
 	c_ok "macos-textkeys derlendi ($(find "$BUILD/_textkeys" -name '*.class' | wc -l | tr -d ' ') sınıf)"
+	# Native diyalog (NSSavePanel) pano kısayolları: dosya adı kutusunda Cmd+V.
+	# Panel AWT'nin dışında → Java'dan çözülemez; agent bu dylib'i System.load eder.
+	c_info "native diyalog kısayolları dylib'i derleniyor (NSSavePanel Cmd+V)…"
+	command -v clang >/dev/null 2>&1 || die "clang yok (xcode-select --install)."
+	clang -dynamiclib -framework Cocoa -o "$BUILD/_textkeys/libnativedialogkeys.dylib" \
+		"$TEXTKEYS_SRC/native/NativeDialogKeys.m" || die "NativeDialogKeys derlenemedi."
+	c_ok "libnativedialogkeys.dylib derlendi"
 }
 
 zoom() {
@@ -591,6 +598,8 @@ package() {
 	# macOS metin kısayolları agent'ını jar yap (-javaagent ile yüklenecek)
 	printf 'Premain-Class: macostextkeys.MacTextKeys\nAgent-Class: macostextkeys.MacTextKeys\n' > "$BUILD/_textkeys/MANIFEST.MF"
 	( cd "$BUILD/_textkeys" && "$(dirname "$jp")/jar" cfm "$in/macos-textkeys.jar" MANIFEST.MF macostextkeys )
+	# Native diyalog kısayolları dylib'i agent jar'ın yanına ($APPDIR) — agent System.load eder.
+	cp "$BUILD/_textkeys/libnativedialogkeys.dylib" "$in/" || die "libnativedialogkeys.dylib eksik (textkeys yeniden çalıştır)."
 	printf 'Premain-Class: macoszoom.MacZoom\nAgent-Class: macoszoom.MacZoom\n' > "$BUILD/_zoom/MANIFEST.MF"
 	( cd "$BUILD/_zoom" && "$(dirname "$jp")/jar" cfm "$in/macos-zoom.jar" MANIFEST.MF macoszoom )
 	# SKIN=1 görünüm agent'ı (bütünleşik başlık + WebMemoryBar); SKIN=0'da jar üretilmez,

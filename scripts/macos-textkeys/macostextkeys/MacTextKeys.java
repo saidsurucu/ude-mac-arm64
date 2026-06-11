@@ -63,6 +63,10 @@ public final class MacTextKeys {
     }
 
     private static void install() {
+        // Native diyalog (NSSavePanel) pano kısayolları: dosya adı kutusunda
+        // Cmd+V/C/X/A. Panel AWT olay zincirinin dışında olduğundan Java tarafında
+        // çözülemez; agent jar'ın yanındaki dylib NSEvent local monitor kurar.
+        loadNativeDialogKeys();
         // UYAP'ın alışılmadık Ctrl kısayollarını standart Cmd kısayollarına bağla
         // (Cmd+B→kalın, Cmd+I→italik, Cmd+U→altı çizili, Cmd+F→bul, Cmd+S→kaydet …).
         MacShortcutRemap.install();
@@ -90,6 +94,24 @@ public final class MacTextKeys {
         } catch (Throwable t) {
             // Agent asla uygulamayı düşürmemeli: hata olursa sessizce vazgeç.
             System.err.println("[macos-textkeys] kurulamadı: " + t);
+        }
+    }
+
+    /**
+     * Agent jar'ın yanındaki libnativedialogkeys.dylib'i yükler (varsa).
+     * Kaynak: scripts/macos-textkeys/native/NativeDialogKeys.m — yalnız key
+     * window NSSavePanel iken Cmd kısayollarını AppKit eylemine çevirir.
+     * Dylib bulunamazsa sessizce geçilir (uygulama native panelde yapıştırma
+     * olmadan da çalışır; agent asla açılışı engellememeli).
+     */
+    private static void loadNativeDialogKeys() {
+        try {
+            java.io.File jar = new java.io.File(MacTextKeys.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+            java.io.File lib = new java.io.File(jar.getParentFile(), "libnativedialogkeys.dylib");
+            if (lib.isFile()) System.load(lib.getAbsolutePath());
+        } catch (Throwable t) {
+            System.err.println("[macos-textkeys] native diyalog dylib yüklenemedi: " + t);
         }
     }
 
