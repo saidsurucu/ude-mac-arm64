@@ -45,6 +45,9 @@ public class SkinPatch {
           + "      macosskin.WordTooltip.install();"
           + "      macosskin.WordCombo.install();"
           + "      macosskin.WordCheck.install();"
+          + "      macosskin.WordButton.install();"
+          + "      macosskin.WordTabs.install();"
+          + "      macosskin.WordField.install();"
           + "      macosskin.DarkMode.trace(\"skin kuruldu ok=\" + __ok + \" dark=\" + macosskin.DarkMode.isDark());"
           + "      try {"
           + "        org.jvnet.substance.fonts.FontSet __base ="
@@ -84,6 +87,9 @@ public class SkinPatch {
           + "        macosskin.WordTooltip.install();"
           + "        macosskin.WordCombo.install();"
           + "      macosskin.WordCheck.install();"
+          + "      macosskin.WordButton.install();"
+          + "      macosskin.WordTabs.install();"
+          + "      macosskin.WordField.install();"
           + "        try {"
           + "          org.jvnet.substance.fonts.FontSet __base ="
           + "            org.jvnet.substance.SubstanceLookAndFeel.getFontPolicy().getFontSet(\"Substance\", null);"
@@ -169,7 +175,7 @@ public class SkinPatch {
                             f.replace(
                                 "{ $_ = macosskin.DarkMode.isDark()"
                               + "    ? new java.awt.Color(38, 38, 38)"
-                              + "    : ($r) $proceed(); }");
+                              + "    : new java.awt.Color(223, 223, 223); }");
                         }
                     } catch (javassist.NotFoundException __nf) {
                     }
@@ -209,7 +215,7 @@ public class SkinPatch {
                 .setBody(
                     "{ return macosskin.DarkMode.isDark()"
                   + "    ? new java.awt.Color(74, 74, 74)"
-                  + "    : new java.awt.Color(186, 192, 200); }");
+                  + "    : new java.awt.Color(198, 198, 198); }");
             writeClass(fu, outDir);
             System.out.println("[SkinPatch] Flamingo kontur rengi grafite çekildi.");
         } catch (Throwable t) {
@@ -652,6 +658,25 @@ public class SkinPatch {
             System.out.println("[SkinPatch] popup menü ikon oluğu düzlendi.");
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: ikon oluğu yaması atlandı: " + t);
+        }
+
+        // Bul/Değiştir diyaloğu (gui.jc) "Seçenekler" grubu: TitledBorder'a
+        // EtchedBorder (3B oymalı, beyaz vurgu çizgili Win95 izi) sarılıyor —
+        // Word düz görünümü için tema-duyarlı tek ince LineBorder'a çevrilir.
+        try {
+            CtClass jc = pool.get("tr.com.havelsan.uyap.system.editor.common.gui.jc");
+            jc.instrument(new ExprEditor() {
+                public void edit(javassist.expr.NewExpr e)
+                        throws javassist.CannotCompileException {
+                    if ("javax.swing.border.EtchedBorder".equals(e.getClassName())) {
+                        e.replace("{ $_ = new macosskin.FlatEtchedBorder(); }");
+                    }
+                }
+            });
+            writeClass(jc, outDir);
+            System.out.println("[SkinPatch] Bul/Değiştir grup çerçevesi düzlendi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: grup çerçevesi yaması atlandı: " + t);
         }
     }
 

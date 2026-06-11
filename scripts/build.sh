@@ -514,6 +514,10 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 		"$SKIN_SRC/macosskin/PopupRemap.java" \
 		"$SKIN_SRC/macosskin/MenuMarks.java" \
 		"$SKIN_SRC/macosskin/WordCheck.java" \
+		"$SKIN_SRC/macosskin/WordButton.java" \
+		"$SKIN_SRC/macosskin/WordTabs.java" \
+		"$SKIN_SRC/macosskin/WordField.java" \
+		"$SKIN_SRC/macosskin/FlatEtchedBorder.java" \
 		"$SKIN_SRC/macosskin/DarkPage.java" \
 		|| { c_warn "[skin] skin helper'ları derlenemedi; yama atlandı."; return 0; }
 	# colorschemes resource'larını helper ağacına kopyala
