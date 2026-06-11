@@ -15,9 +15,16 @@ package macostextkeys;
  * Harf" uyumu) ve karşılığın ilk harfi tr-TR ile büyütülür.
  */
 
+import java.awt.AWTEvent;
+import java.awt.Toolkit;
+import java.awt.event.AWTEventListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowEvent;
 import java.util.Locale;
 import java.util.Map;
 
+import javax.swing.JPasswordField;
+import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
 
 public final class TextReplace {
@@ -29,6 +36,47 @@ public final class TextReplace {
     private static final String BOUNDARIES = TRIGGERS + "([{";
 
     private TextReplace() {}
+
+    /** Agent giriş noktası; -Dmacostextreplace.off=1 ile tamamen kapatılır. */
+    public static void install() {
+        if (System.getProperty("macostextreplace.off") != null) return;
+        try {
+            Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
+                @Override public void eventDispatched(AWTEvent e) {
+                    if (e.getID() == KeyEvent.KEY_TYPED) {
+                        onKeyTyped((KeyEvent) e);
+                    } else if (e.getID() == WindowEvent.WINDOW_ACTIVATED) {
+                        // Mac'te eklenen yeni kısayol restart'sız gelsin.
+                        ReplacementStore.refreshAsync();
+                    }
+                }
+            }, AWTEvent.KEY_EVENT_MASK | AWTEvent.WINDOW_EVENT_MASK);
+            ReplacementStore.refreshAsync();
+            TrLog.log("TextReplace kuruldu");
+        } catch (Throwable t) {
+            System.err.println("[macos-textkeys] TextReplace kurulamadı: " + t);
+        }
+    }
+
+    private static void onKeyTyped(KeyEvent e) {
+        try {
+            if (TRIGGERS.indexOf(e.getKeyChar()) < 0) return;
+            Object src = e.getSource();
+            if (!(src instanceof JTextComponent) || src instanceof JPasswordField) return;
+            final JTextComponent tc = (JTextComponent) src;
+            if (!tc.isEditable() || !tc.isEnabled()) return;
+            // AWTEventListener bileşen işlemeden ÖNCE çağrılır; karakterin belgeye
+            // girmesini ve UDE'nin kendi keyTyped zincirini (otomatik büyük harf
+            // vb.) beklemek için invokeLater.
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override public void run() {
+                    maybeReplace(tc, ReplacementStore.table(), ReplacementStore.maxShortcutLen());
+                }
+            });
+        } catch (Throwable t) {
+            TrLog.log("onKeyTyped hata: " + t);
+        }
+    }
 
     static boolean isBoundary(char c) {
         return BOUNDARIES.indexOf(c) >= 0;

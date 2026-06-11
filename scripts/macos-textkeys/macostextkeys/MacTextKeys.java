@@ -81,6 +81,9 @@ public final class MacTextKeys {
         // Dikte düzeltmesi: no-op InputMethodListener → sentetik keyTyped kapanır,
         // commit kit'in normal yazma aksiyonundan akar (metin kaybı + donma biter).
         DictationFix.install();
+        // macOS sistem geneli Metin Değiştirme (Ayarlar → Klavye) kısayollarını
+        // UDE metin alanlarında uygula ("mrb " → "Merhaba! ").
+        TextReplace.install();
         try {
             Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
                 @Override public void eventDispatched(AWTEvent e) {
