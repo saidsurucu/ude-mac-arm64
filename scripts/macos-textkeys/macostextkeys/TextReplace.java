@@ -23,9 +23,15 @@ import java.awt.event.WindowEvent;
 import java.util.Locale;
 import java.util.Map;
 
+import javax.swing.JEditorPane;
 import javax.swing.JPasswordField;
 import javax.swing.SwingUtilities;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.Document;
+import javax.swing.text.EditorKit;
 import javax.swing.text.JTextComponent;
+import javax.swing.text.StyledEditorKit;
 
 public final class TextReplace {
 
@@ -137,9 +143,24 @@ public final class TextReplace {
             String phrase = lookup(table, word);
             if (phrase == null) return false;
             int docStart = from + tokStart;
-            tc.setCaretPosition(docStart);
-            tc.moveCaretPosition(docStart + word.length());
-            tc.replaceSelection(phrase);
+            // Seçim üzerinden değil (moveCaretPosition/moveDot UDE'nin caretUpdate
+            // zincirini — hB.caretUpdate → gui.aD.a — NPE'ye düşürüyor), belge
+            // düzeyinde atomik replace; yazı nitelikleri caret'in giriş
+            // niteliklerinden (JTextPane.replaceSelection'ın kendi yolu).
+            Document doc = tc.getDocument();
+            AttributeSet attr = null;
+            if (tc instanceof JEditorPane) {
+                EditorKit kit = ((JEditorPane) tc).getEditorKit();
+                if (kit instanceof StyledEditorKit) {
+                    attr = ((StyledEditorKit) kit).getInputAttributes().copyAttributes();
+                }
+            }
+            if (doc instanceof AbstractDocument) {
+                ((AbstractDocument) doc).replace(docStart, word.length(), phrase, attr);
+            } else {
+                doc.remove(docStart, word.length());
+                doc.insertString(docStart, phrase, attr);
+            }
             tc.setCaretPosition(docStart + phrase.length() + 1);
             TrLog.log("değiştirildi: '" + word + "' → " + phrase.length() + " karakter");
             return true;
