@@ -72,6 +72,8 @@ public final class MacTextKeys {
         // Ribbon tooltip'lerindeki Windows kısayollarını Mac karşılıklarıyla değiştir
         // (Kaydet "(Shift+Ctrl+K)" → "(⌘S)", Kalın "(Ctrl+K)" → "(⌘B)", hizalama → "(⌘L)" …).
         MacTooltips.install();
+        // Dikte/IME teşhisi (UDE_DICTLOG=1 ile etkin; aksi halde no-op).
+        DictationProbe.install();
         try {
             Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
                 @Override public void eventDispatched(AWTEvent e) {
