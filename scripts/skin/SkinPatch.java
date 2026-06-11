@@ -44,6 +44,7 @@ public class SkinPatch {
           + "      javax.swing.UIManager.put(\"SliderUI\", \"com.apple.laf.AquaSliderUI\");"
           + "      macosskin.WordTooltip.install();"
           + "      macosskin.WordCombo.install();"
+          + "      macosskin.WordCheck.install();"
           + "      macosskin.DarkMode.trace(\"skin kuruldu ok=\" + __ok + \" dark=\" + macosskin.DarkMode.isDark());"
           + "      try {"
           + "        org.jvnet.substance.fonts.FontSet __base ="
@@ -82,6 +83,7 @@ public class SkinPatch {
           + "      javax.swing.UIManager.put(\"SliderUI\", \"com.apple.laf.AquaSliderUI\");"
           + "        macosskin.WordTooltip.install();"
           + "        macosskin.WordCombo.install();"
+          + "      macosskin.WordCheck.install();"
           + "        try {"
           + "          org.jvnet.substance.fonts.FontSet __base ="
           + "            org.jvnet.substance.SubstanceLookAndFeel.getFontPolicy().getFontSet(\"Substance\", null);"
@@ -589,6 +591,36 @@ public class SkinPatch {
             System.out.println("[SkinPatch] özel popup widget renkleri PopupRemap'e bağlandı.");
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: popup widget yaması atlandı: " + t);
+        }
+
+        // WebLaF menü onay/radyo işaretleri: WebCheckBoxMenuItemUI ve
+        // WebRadioButtonMenuItemUI statik 16px 1x PNG'leri drawImage'la basar —
+        // Retina'da bulanık Win95 kutuları. Statikler MenuMarks'ın
+        // çok-çözünürlüklü tema-duyarlı vektör işaretleriyle değiştirilir
+        // (final kaldırılıp clinit sonuna atama eklenir).
+        try {
+            CtClass cbm = pool.get("com.alee.laf.menu.WebCheckBoxMenuItemUI");
+            for (String f : new String[]{"boxIcon", "boxCheckIcon"}) {
+                javassist.CtField cf = cbm.getDeclaredField(f);
+                cf.setModifiers(cf.getModifiers() & ~javassist.Modifier.FINAL);
+            }
+            cbm.getClassInitializer().insertAfter(
+                "{ boxIcon = macosskin.MenuMarks.empty();"
+              + "  boxCheckIcon = macosskin.MenuMarks.check(); }");
+            writeClass(cbm, outDir);
+
+            CtClass rbm = pool.get("com.alee.laf.menu.WebRadioButtonMenuItemUI");
+            for (String f : new String[]{"radioIcon", "radioCheckIcon"}) {
+                javassist.CtField cf = rbm.getDeclaredField(f);
+                cf.setModifiers(cf.getModifiers() & ~javassist.Modifier.FINAL);
+            }
+            rbm.getClassInitializer().insertAfter(
+                "{ radioIcon = macosskin.MenuMarks.empty();"
+              + "  radioCheckIcon = macosskin.MenuMarks.radioOn(); }");
+            writeClass(rbm, outDir);
+            System.out.println("[SkinPatch] menü onay/radyo işaretleri Retina vektöre çekildi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: menü işaret yaması atlandı: " + t);
         }
 
         // Popup menü ikon oluğu: MenuPanel Office-2007 renderSurface bandı +

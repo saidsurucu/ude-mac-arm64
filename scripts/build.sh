@@ -512,6 +512,8 @@ apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 		"$SKIN_SRC/macosskin/WordTooltip.java" \
 		"$SKIN_SRC/macosskin/WordCombo.java" \
 		"$SKIN_SRC/macosskin/PopupRemap.java" \
+		"$SKIN_SRC/macosskin/MenuMarks.java" \
+		"$SKIN_SRC/macosskin/WordCheck.java" \
 		|| { c_warn "[skin] skin helper'ları derlenemedi; yama atlandı."; return 0; }
 	# colorschemes resource'larını helper ağacına kopyala
 	if [ -f "$SKIN_SRC/macosskin/flatude.colorschemes" ]; then
