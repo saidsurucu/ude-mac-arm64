@@ -64,6 +64,7 @@ public final class MacLook {
                         try { fixRulerBackground(f); } catch (Throwable t) { log("ruler: " + t); }
                         try { boldTaskTabs(f); } catch (Throwable t) { log("tabfont: " + t); }
                         try { removeScopeCombo(f); } catch (Throwable t) { log("scopecombo: " + t); }
+                        try { addDarkPageToggle(f); } catch (Throwable t) { log("darkpage: " + t); }
                     });
                 }
             }, AWTEvent.WINDOW_EVENT_MASK);
@@ -168,6 +169,72 @@ public final class MacLook {
             parent.repaint();
             log("kapsam combo kaldırıldı: " + victim.getClass().getName());
         }
+    }
+
+    /** Görünüm sekmesine "Koyu belge arkaplanı" onay kutusu ekler (Word koyu
+     *  modu sayfası). Band, ribbon MODELİNDEN bulunur ("Klasik görünüme geç"
+     *  kutusunu içeren band) — bileşen ağacı yalnız seçili sekmeyi içerdiğinden
+     *  ağaç araması açılışta bulamazdı. Durum macosskin.DarkPage'te (prefs ile
+     *  kalıcı, varsayılan kapalı); Flamingo/macosskin sınıflarına derleme
+     *  bağımlılığı yok, hepsi yansımayla. */
+    private static void addDarkPageToggle(JFrame f) throws Exception {
+        Component ribbon = findByClassName(f, "JRibbon");
+        if (ribbon == null) return;
+        JComponent r = (JComponent) ribbon;
+        if (Boolean.TRUE.equals(r.getClientProperty("macoslook.darkpage"))) return;
+
+        Class<?> dp;
+        try {
+            dp = Class.forName("macosskin.DarkPage");
+        } catch (ClassNotFoundException e) { log("darkpage: DarkPage sınıfı yok"); return; }
+
+        Object targetBand = null;
+        int taskCount = (Integer) ribbon.getClass().getMethod("getTaskCount").invoke(ribbon);
+        for (int i = 0; i < taskCount && targetBand == null; i++) {
+            Object task = ribbon.getClass().getMethod("getTask", int.class).invoke(ribbon, i);
+            java.util.List<?> bands = (java.util.List<?>)
+                task.getClass().getMethod("getBands").invoke(task);
+            for (Object band : bands) {
+                Component cp = (Component)
+                    band.getClass().getMethod("getControlPanel").invoke(band);
+                if (cp != null && findCheckBox(cp, "Klasik görünüme geç") != null) {
+                    targetBand = band;
+                    break;
+                }
+            }
+        }
+        if (targetBand == null) { log("darkpage: hedef band bulunamadı"); return; }
+
+        final javax.swing.JCheckBox cb = new javax.swing.JCheckBox("Koyu belge arkaplanı");
+        cb.setOpaque(false);
+        cb.setSelected((Boolean) dp.getMethod("isOn").invoke(null));
+        final java.lang.reflect.Method setOn = dp.getMethod("setOn", boolean.class);
+        cb.addActionListener(e -> {
+            try {
+                setOn.invoke(null, cb.isSelected());
+                for (java.awt.Window w : java.awt.Window.getWindows()) w.repaint();
+            } catch (Throwable t) { log("darkpage toggle: " + t); }
+        });
+
+        Class<?> jrcCls = Class.forName("org.pushingpixels.flamingo.api.ribbon.JRibbonComponent");
+        Object jrc = jrcCls.getConstructor(JComponent.class).newInstance(cb);
+        targetBand.getClass().getMethod("addRibbonComponent", jrcCls).invoke(targetBand, jrc);
+        r.putClientProperty("macoslook.darkpage", Boolean.TRUE);
+        log("darkpage: onay kutusu eklendi");
+    }
+
+    private static javax.swing.JCheckBox findCheckBox(Component c, String text) {
+        if (c instanceof javax.swing.JCheckBox
+                && text.equals(((javax.swing.JCheckBox) c).getText())) {
+            return (javax.swing.JCheckBox) c;
+        }
+        if (c instanceof Container) {
+            for (Component k : ((Container) c).getComponents()) {
+                javax.swing.JCheckBox hit = findCheckBox(k, text);
+                if (hit != null) return hit;
+            }
+        }
+        return null;
     }
 
     private static javax.swing.JComboBox<?> findScopeCombo(Component c) {

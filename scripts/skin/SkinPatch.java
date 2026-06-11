@@ -623,6 +623,21 @@ public class SkinPatch {
             System.out.println("[SkinPatch] UYARI: menü işaret yaması atlandı: " + t);
         }
 
+        // Koyu belge arkaplanı (Görünüm sekmesindeki onay kutusu, MacLook
+        // agent'ı ekler): editör bileşeni hj.paint'in Graphics'i DarkPage ile
+        // sarılır — beyaz sayfa/siyah metin HSL açıklık çevirisiyle Word koyu
+        // moduna eşlenir. Kapalıyken (varsayılan) wrap aynen geri döner;
+        // baskı yolu (isPaintingForPrint) hiç sarılmaz.
+        try {
+            CtClass hj = pool.get("tr.com.havelsan.uyap.system.editor.common.text.hj");
+            hj.getMethod("paint", "(Ljava/awt/Graphics;)V").insertBefore(
+                "{ $1 = macosskin.DarkPage.wrap(this, $1); }");
+            writeClass(hj, outDir);
+            System.out.println("[SkinPatch] koyu belge arkaplanı kancası eklendi (hj.paint).");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: koyu belge yaması atlandı: " + t);
+        }
+
         // Popup menü ikon oluğu: MenuPanel Office-2007 renderSurface bandı +
         // ayraç çizgisi basar; Word menülerinde oluk yok — ikisi de boşaltılır.
         try {
