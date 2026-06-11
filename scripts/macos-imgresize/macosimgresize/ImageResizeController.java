@@ -26,7 +26,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Satır-içi imajları köşe tutamaçlarıyla, oran korumalı boyutlandırma denetçisi.
+ * Satır-içi imajları köşe tutamaçlarıyla boyutlandırma denetçisi (serbest;
+ * Shift basılıyken en/boy oranı kilitli).
  * hj.processMouseEvent / processMouseMotionEvent başından intercept(), hj.paint
  * sonundan paintOverlay() çağrılır (build-time Javassist enjeksiyonu).
  *
@@ -90,7 +91,8 @@ public final class ImageResizeController {
         boolean swallowNextClick;  // onReleased sonrası gelen CLICKED olayını yut
         Rectangle base;            // sürükleme başındaki görünen sınırlar (px)
         Rectangle preview;         // kesikli çerçeve (px)
-        double scale = 1.0;        // önizleme ölçeği (commit'te kullanılır)
+        double scaleX = 1.0;       // yatay önizleme ölçeği (commit'te kullanılır)
+        double scaleY = 1.0;       // dikey önizleme ölçeği
     }
 
     // ---- enjeksiyon noktaları -------------------------------------------------
@@ -165,7 +167,8 @@ public final class ImageResizeController {
                     s.handle = h;
                     s.base = b;
                     s.preview = new Rectangle(b);
-                    s.scale = 1.0;
+                    s.scaleX = 1.0;
+                    s.scaleY = 1.0;
                     return true;
                 }
             }
@@ -187,14 +190,22 @@ public final class ImageResizeController {
         Point fixed = corners(b)[3 - s.handle];
         double sx = Math.abs(e.getX() - fixed.x) / (double) b.width;
         double sy = Math.abs(e.getY() - fixed.y) / (double) b.height;
-        double scale = Math.max(sx, sy);          // oran korumalı: baskın eksen
-        scale = clampScale(c, s, scale);
-        int w = Math.max(1, (int) Math.round(b.width * scale));
-        int h = Math.max(1, (int) Math.round(b.height * scale));
+        if (e.isShiftDown()) {
+            // oran kilidi: baskın eksen, iki eksenin sınırına birlikte kırpılır
+            double scale = clampScale(c, s, Math.max(sx, sy));
+            sx = scale;
+            sy = scale;
+        } else {
+            sx = clampAxis(c, s, sx, true);
+            sy = clampAxis(c, s, sy, false);
+        }
+        int w = Math.max(1, (int) Math.round(b.width * sx));
+        int h = Math.max(1, (int) Math.round(b.height * sy));
         // imaj yön değiştirmez: çerçeve, sabit köşeden orijinal yöne uzanır
         int x = (s.handle == 1 || s.handle == 3) ? b.x : b.x + b.width - w;   // NE/SE: sol sabit
         int y = (s.handle == 2 || s.handle == 3) ? b.y : b.y + b.height - h;  // SW/SE: üst sabit
-        s.scale = scale;
+        s.scaleX = sx;
+        s.scaleY = sy;
         s.preview = new Rectangle(x, y, w, h);
         c.repaint();
         return true;
@@ -206,8 +217,9 @@ public final class ImageResizeController {
         s.swallowNextClick = true;
         boolean hadPreview = s.preview != null;
         s.preview = null;
-        if (hadPreview && Math.abs(s.scale - 1.0) > 0.005 && s.selected != null) {
-            commit(c, s.selected, s.scale);
+        if (hadPreview && s.selected != null
+                && (Math.abs(s.scaleX - 1.0) > 0.005 || Math.abs(s.scaleY - 1.0) > 0.005)) {
+            commit(c, s.selected, s.scaleX, s.scaleY);
         }
         c.repaint();
         return true;
@@ -335,7 +347,7 @@ public final class ImageResizeController {
         return -1;
     }
 
-    /** Ölçeği [min 10pt, sayfa basılabilir alanı] aralığına kırpar (stok diyalog kuralı). */
+    /** Ortak ölçeği [min 10pt, sayfa basılabilir alanı] aralığına kırpar (oran kilitliyken). */
     private static double clampScale(JTextComponent c, State s, double scale) {
         double baseWpt = basePt(s, true), baseHpt = basePt(s, false);
         PageFormat pf = pageFormat(c);
@@ -345,6 +357,16 @@ public final class ImageResizeController {
         }
         scale = Math.max(scale, Math.max(MIN_PT / baseWpt, MIN_PT / baseHpt));
         return scale;
+    }
+
+    /** Tek eksenin ölçeğini [min 10pt, sayfanın o eksendeki basılabilir alanı] aralığına kırpar. */
+    private static double clampAxis(JTextComponent c, State s, double scale, boolean width) {
+        double basePt = basePt(s, width);
+        PageFormat pf = pageFormat(c);
+        if (pf != null) {
+            scale = Math.min(scale, (width ? pf.getImageableWidth() : pf.getImageableHeight()) / basePt);
+        }
+        return Math.max(scale, MIN_PT / basePt);
     }
 
     /**
@@ -370,12 +392,12 @@ public final class ImageResizeController {
     }
 
     /** Yeni width/height attribute'larını tek undo adımıyla uygular (gui.jD yolu). */
-    private static void commit(JTextComponent c, Element el, double scale) {
+    private static void commit(JTextComponent c, Element el, double scaleX, double scaleY) {
         try {
             if (!elementCurrent(c, el)) return;
             State s = STATES.get(c);
-            double wPt = basePt(s, true) * scale;
-            double hPt = basePt(s, false) * scale;
+            double wPt = basePt(s, true) * scaleX;
+            double hPt = basePt(s, false) * scaleY;
             PageFormat pf = pageFormat(c);
             if (pf != null) {
                 wPt = Math.min(wPt, pf.getImageableWidth());
@@ -389,7 +411,7 @@ public final class ImageResizeController {
             DefaultStyledDocument doc = (DefaultStyledDocument) c.getDocument();
             int start = el.getStartOffset();
             doc.setCharacterAttributes(start, el.getEndOffset() - start, sas, false);
-            log("commit: " + (int) wPt + "x" + (int) hPt + "pt (scale=" + scale + ")");
+            log("commit: " + (int) wPt + "x" + (int) hPt + "pt (scaleX=" + scaleX + " scaleY=" + scaleY + ")");
         } catch (Throwable ex) {
             log("commit hata: " + ex);
         }
