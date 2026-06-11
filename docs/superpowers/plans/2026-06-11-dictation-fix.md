@@ -221,554 +221,183 @@ Protokol:
 
 ---
 
-## Faz 2 — Düzeltme (yalnız H2 doğrulanırsa)
+## Faz 2 — Düzeltme (REVİZE, 2026-06-11)
 
-### Task 3: `DictationGuardTest` — önce başarısız test
+> **Revizyon notu:** Faz 1, canlı JVM'e dynamic attach simülasyonuyla kapatıldı
+> (kullanıcı testi beklenmeden). Bulgu: commit'teki sentetik KEY_TYPED'lar
+> UDE'nin `getCaret()→(text.l)` cast'ini `ComposedTextCaret` aktifken patlatıyor.
+> JDK, bileşende kayıtlı `InputMethodListener` varsa sentezi kapatır ve commit
+> `mapCommittedTextToAction` ile temiz akar — canlı deneyle kanıtlandı
+> (spec'teki "EK" bölümü). Bu yüzden eski Task 3-6 (DictationGuardTest,
+> DictationGuard, DictationPatch, DICTFIX build entegrasyonu) İPTAL; düzeltme
+> tek agent sınıfına indi. Vendor jar'a dokunulmaz.
 
-**Files:**
-- Create: `tests/DictationGuardTest.java`
-
-Test, `macosdict.DictationGuard`'ı (henüz yok) düz bir `JTextArea` ile sentetik
-`InputMethodEvent`'ler üzerinden sürer — guard yalnız `javax.swing.text` API'si
-kullandığı için UDE jar'ı gerekmez. `tests/IconDarkenPixelTest.java` gibi elle
-javac+java ile koşulur.
-
-- [ ] **Step 1: Testi yaz**
-
-```java
-import java.awt.event.InputMethodEvent;
-import java.awt.font.TextHitInfo;
-import java.text.AttributedString;
-
-import javax.swing.JTextArea;
-
-import macosdict.DictationGuard;
-
-/**
- * DictationGuard mantık testi (ekran-dışı, UDE jar'sız).
- * Koşum:
- *   javac --release 11 -encoding UTF-8 -d build/_dicttest \
- *       scripts/macos-dictation/macosdict/DictationGuard.java tests/DictationGuardTest.java
- *   java -Djava.awt.headless=true -cp build/_dicttest DictationGuardTest
- */
-public class DictationGuardTest {
-
-    static int failures = 0;
-
-    public static void main(String[] args) {
-        testIncrementalDictation();
-        testDeadKeyCircumflex();
-        testComposedCleared();
-        testCaretEventIdlePassthrough();
-        testNotEditablePassthrough();
-        if (failures > 0) {
-            System.err.println(failures + " test BAŞARISIZ");
-            System.exit(1);
-        }
-        System.out.println("Tüm testler geçti.");
-    }
-
-    /** Dikte akışı: composed büyür, sonunda commit olur; metin kalıcı kalmalı. */
-    static void testIncrementalDictation() {
-        JTextArea ta = new JTextArea();
-        handle(ta, "mer", 0);                 // composed "mer"
-        check("dikte-1 composed", "mer", ta);
-        handle(ta, "merhaba", 0);             // composed büyüdü
-        check("dikte-2 composed büyüme", "merhaba", ta);
-        handle(ta, "merhaba", 7);             // tamamı commit (dikte kapanışı)
-        check("dikte-3 commit", "merhaba", ta);
-        handle(ta, " dünya", 6);              // ikinci parça doğrudan commit
-        check("dikte-4 ek commit", "merhaba dünya", ta);
-    }
-
-    /** Ölü tuş: ^ composed görünür, â commit'le yerine geçer. */
-    static void testDeadKeyCircumflex() {
-        JTextArea ta = new JTextArea();
-        ta.setText("h");
-        ta.setCaretPosition(1);
-        handle(ta, "^", 0);
-        check("ölütuş-1 composed", "h^", ta);
-        handle(ta, "â", 1);
-        check("ölütuş-2 commit", "hâ", ta);
-    }
-
-    /** Boş TEXT_CHANGED (iptal): composed temizlenmeli, kalıcı metin kalmalı. */
-    static void testComposedCleared() {
-        JTextArea ta = new JTextArea();
-        ta.setText("sabit");
-        ta.setCaretPosition(5);
-        handle(ta, "xyz", 0);
-        check("iptal-1 composed", "sabitxyz", ta);
-        handle(ta, "", 0);
-        check("iptal-2 temizlik", "sabit", ta);
-    }
-
-    /** Aktif composed yokken CARET olayı guard'a takılmamalı (false dönmeli). */
-    static void testCaretEventIdlePassthrough() {
-        JTextArea ta = new JTextArea();
-        InputMethodEvent e = new InputMethodEvent(ta,
-                InputMethodEvent.CARET_POSITION_CHANGED, null, 0,
-                TextHitInfo.leading(0), null);
-        boolean handled = DictationGuard.handle(ta, e);
-        if (handled) { failures++; System.err.println("caret-idle: true döndü, false beklenirdi"); }
-        else System.out.println("caret-idle OK");
-    }
-
-    /** Düzenlenemez bileşende guard devreye girmemeli. */
-    static void testNotEditablePassthrough() {
-        JTextArea ta = new JTextArea();
-        ta.setEditable(false);
-        boolean handled = handle(ta, "abc", 3);
-        if (handled) { failures++; System.err.println("salt-okunur: true döndü, false beklenirdi"); }
-        else System.out.println("salt-okunur OK");
-        if (!ta.getText().isEmpty()) { failures++; System.err.println("salt-okunur: metin değişti"); }
-    }
-
-    // --- yardımcılar ---
-
-    static boolean handle(JTextArea ta, String text, int committed) {
-        InputMethodEvent e = new InputMethodEvent(ta,
-                InputMethodEvent.INPUT_METHOD_TEXT_CHANGED,
-                text.isEmpty() ? null : new AttributedString(text).getIterator(),
-                committed, TextHitInfo.leading(0), null);
-        return DictationGuard.handle(ta, e);
-    }
-
-    static void check(String name, String expected, JTextArea ta) {
-        if (!expected.equals(ta.getText())) {
-            failures++;
-            System.err.println(name + ": beklenen \"" + expected
-                    + "\" bulunan \"" + ta.getText() + "\"");
-        } else {
-            System.out.println(name + " OK");
-        }
-    }
-}
-```
-
-- [ ] **Step 2: Testin derlenemediğini (sınıf yok) doğrula**
-
-Run:
-```bash
-cd /Users/saidsurucu/Documents/GitHub/ude-mac-arm
-mkdir -p build/_dicttest
-javac --release 11 -encoding UTF-8 -d build/_dicttest tests/DictationGuardTest.java
-```
-Expected: FAIL — `package macosdict does not exist`.
-
-- [ ] **Step 3: Commit (yalnız test)**
-
-```bash
-git add tests/DictationGuardTest.java
-git commit -m "test(dictation): DictationGuard mantık testi (önce başarısız)"
-```
-
-### Task 4: `macosdict.DictationGuard` helper
+### Task 3 (revize): `DictationFix` agent sınıfı
 
 **Files:**
-- Create: `scripts/macos-dictation/macosdict/DictationGuard.java`
+- Create: `scripts/macos-textkeys/macostextkeys/DictationFix.java`
+- Modify: `scripts/macos-textkeys/macostextkeys/MacTextKeys.java` (install() içine bir satır)
 
-- [ ] **Step 1: DictationGuard.java'yı yaz**
+- [ ] **Step 1: DictationFix.java'yı yaz**
 
 ```java
-package macosdict;
+package macostextkeys;
 
 /*
- * macOS dikte (IME) düzeltmesi — DICTFIX=1.
+ * macOS dikte (IME) düzeltmesi.
  *
- * Sorun: macOS dikte metni InputMethodEvent'lerle (composed/committed) verir.
- * UDE'nin özel doküman/view katmanı (DocumentEx + wp.*) Swing'in composed-text
- * makinesini taşıyamıyor: dikte kapanırken commit aşaması patlıyor → metin
- * kayboluyor, EDT donuyor (Faz 1 teşhisiyle kanıtlandı).
+ * Sorun: macOS dikte metni InputMethodEvent'lerle verir. JTextComponent,
+ * processInputMethodEvent override'ı ya da kayıtlı InputMethodListener'ı
+ * OLMAYAN bileşeni "pasif IME istemcisi" sayar ve commit edilen her karakteri
+ * SENTETİK KEY_TYPED olarak keyTyped dinleyicilerine işler
+ * (JTextComponent.replaceInputMethodText). UDE'nin kelime-denetim zinciri
+ * (im.keyTyped → … → gui.aC.a) o sırada getCaret()'i kendi text.l tipine cast
+ * eder; commit anında caret Swing'in geçici ComposedTextCaret'i olduğundan
+ * ClassCastException fırlar → commit yarıda kalır (dikte metni kaybolur),
+ * EDT'deki istisna CInputMethod akışını bozar (donma).
  *
- * Çözüm: editör bileşeninin processInputMethodEvent'i Javassist ile sarılır
- * (DictationPatch). Bu sınıf olayı KENDİSİ işler: committed metni kalıcı düz
- * metin olarak yazar (replaceSelection), composed metni geçici düz metin olarak
- * gösterir (bir sonraki olayda doğrulayarak siler). Swing'in attribute'lı
- * composed makinesi hiç çalışmaz. Ölü tuşlar (^→â) ve emoji seçici aynı
- * committed yoldan bozulmadan geçer.
- *
- * Hata sözleşmesi: handle() hiçbir koşulda istisna sızdırmaz; sorun olursa
- * false döner → çağıran super'e düşer (statüko). En kötü durum = bugünkü davranış.
+ * Çözüm: her JTextComponent odaklandığında no-op InputMethodListener eklenir.
+ * addInputMethodListener, JTextComponent'te needToSendKeyTypedEvent=false
+ * yapar → sentetik keyTyped üretilmez; committed metin
+ * mapCommittedTextToAction ile editör kit'inin NORMAL yazma aksiyonundan
+ * belgeye girer. Composed görüntüleme, ölü tuşlar (^→â) ve emoji seçici aynı
+ * yoldan bozulmadan çalışır (canlı JVM'de attach deneyiyle kanıtlandı).
  */
 
+import java.awt.AWTEvent;
+import java.awt.Toolkit;
+import java.awt.event.AWTEventListener;
+import java.awt.event.FocusEvent;
 import java.awt.event.InputMethodEvent;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.text.AttributedCharacterIterator;
-import java.text.CharacterIterator;
-import java.util.Map;
-import java.util.WeakHashMap;
+import java.awt.event.InputMethodListener;
 
-import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
-import javax.swing.text.Position;
 
-public final class DictationGuard {
+public final class DictationFix {
 
-    /** Bileşen başına aktif geçici (composed) metin kaydı. */
-    private static final class State {
-        Position start;   // belge içinde kayan başlangıç konumu
-        int length;       // geçici metnin uzunluğu
-        String text;      // silmeden önce doğrulama için içerik
+    /** No-op dinleyici; varlığı sentetik keyTyped üretimini kapatır. */
+    private static final class NoopImListener implements InputMethodListener {
+        @Override public void inputMethodTextChanged(InputMethodEvent e) {}
+        @Override public void caretPositionChanged(InputMethodEvent e) {}
     }
 
-    private static final Map<JTextComponent, State> STATES =
-            new WeakHashMap<JTextComponent, State>();
-    private static final boolean LOG = "1".equals(System.getenv("UDE_DICTLOG"));
+    private DictationFix() {}
 
-    private DictationGuard() {}
-
-    /**
-     * Yamalı processInputMethodEvent'ten çağrılır. true → olay işlendi
-     * (çağıran return etmeli); false → varsayılan işleme (super) devam etsin.
-     */
-    public static boolean handle(Object comp, InputMethodEvent e) {
+    public static void install() {
         try {
-            if (!(comp instanceof JTextComponent)) return false;
-            JTextComponent tc = (JTextComponent) comp;
-            if (!tc.isEditable() || !tc.isEnabled()) return false;
-
-            if (e.getID() != InputMethodEvent.INPUT_METHOD_TEXT_CHANGED) {
-                // CARET_POSITION_CHANGED: composed makinemiz yok. Aktif geçici
-                // metnimiz varsa olayı yut (varsayılan makineye sızmasın);
-                // yoksa dokunma.
-                boolean active;
-                synchronized (STATES) { active = STATES.get(tc) != null; }
-                if (active) { e.consume(); return true; }
-                return false;
-            }
-
-            Document doc = tc.getDocument();
-            if (doc == null) return false;
-
-            // 1) Önceki geçici metni DOĞRULAYARAK sil (belge başka yoldan
-            //    değiştiyse dokunma — yanlış silme metin kaybından beterdir).
-            State st;
-            synchronized (STATES) { st = STATES.remove(tc); }
-            if (st != null && st.length > 0) {
-                int off = st.start.getOffset();
-                if (off >= 0 && off + st.length <= doc.getLength()
-                        && doc.getText(off, st.length).equals(st.text)) {
-                    doc.remove(off, st.length);
-                    tc.setCaretPosition(Math.min(off, doc.getLength()));
+            Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
+                @Override public void eventDispatched(AWTEvent e) {
+                    if (e.getID() != FocusEvent.FOCUS_GAINED) return;
+                    Object src = e.getSource();
+                    if (src instanceof JTextComponent) apply((JTextComponent) src);
                 }
-            }
-
-            // 2) Olay metnini committed/composed olarak ayır.
-            int committedCount = e.getCommittedCharacterCount();
-            StringBuilder committed = new StringBuilder();
-            StringBuilder composed = new StringBuilder();
-            AttributedCharacterIterator it = e.getText();
-            if (it != null) {
-                int i = 0;
-                for (char c = it.first(); c != CharacterIterator.DONE; c = it.next(), i++) {
-                    if (i < committedCount) committed.append(c);
-                    else composed.append(c);
-                }
-            }
-
-            // 3) Committed metni KALICI yaz (editör kit'inin giriş
-            //    attribute'larıyla; seçim varsa onu da değiştirir).
-            if (committed.length() > 0) {
-                tc.replaceSelection(committed.toString());
-            }
-
-            // 4) Kalan composed metni geçici düz metin olarak ekle, yerini
-            //    Position ile kaydet (araya başka ekleme olursa kayar).
-            if (composed.length() > 0) {
-                int pos = tc.getCaretPosition();
-                doc.insertString(pos, composed.toString(), null);
-                State ns = new State();
-                ns.start = doc.createPosition(pos);
-                ns.length = composed.length();
-                ns.text = composed.toString();
-                synchronized (STATES) { STATES.put(tc, ns); }
-                tc.setCaretPosition(Math.min(pos + composed.length(), doc.getLength()));
-            }
-
-            e.consume();
-            return true;
+            }, AWTEvent.FOCUS_EVENT_MASK);
         } catch (Throwable t) {
-            log(t);
-            return false; // statükoya düş
+            // Agent asla uygulamayı düşürmemeli.
+            System.err.println("[macos-textkeys] DictationFix kurulamadı: " + t);
         }
     }
 
-    private static void log(Throwable t) {
-        if (!LOG) return;
+    private static void apply(JTextComponent tc) {
         try {
-            StringWriter sw = new StringWriter();
-            t.printStackTrace(new PrintWriter(sw));
-            File f = new File(System.getProperty("user.home"),
-                    "Library/Logs/ude-dictation.txt");
-            File dir = f.getParentFile();
-            if (dir != null) dir.mkdirs();
-            try (FileWriter w = new FileWriter(f, true)) {
-                w.write(System.currentTimeMillis() + " GUARD-HATA\n" + sw + System.lineSeparator());
+            for (InputMethodListener l : tc.getInputMethodListeners()) {
+                if (l instanceof NoopImListener) return; // idempotent
             }
-        } catch (Throwable ignore) {
-            // log başarısızsa sessizce geç
+            tc.addInputMethodListener(new NoopImListener());
+        } catch (Throwable t) {
+            // EDT'yi asla düşürme.
         }
     }
 }
 ```
 
-- [ ] **Step 2: Testi derle ve koş — geçmeli**
+- [ ] **Step 2: MacTextKeys.install()'a kancayı ekle**
+
+`DictationProbe.install();` satırından hemen sonra:
+
+```java
+        // Dikte düzeltmesi: no-op InputMethodListener → sentetik keyTyped kapanır,
+        // commit kit'in normal yazma aksiyonundan akar (metin kaybı + donma biter).
+        DictationFix.install();
+```
+
+- [ ] **Step 3: Derlemeyi doğrula**
+
+Run: `bash scripts/build.sh textkeys`
+Expected: `macos-textkeys derlendi (16 sınıf)` (DictationFix + 2 iç sınıf eklendi), hata yok.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/macos-textkeys/macostextkeys/DictationFix.java scripts/macos-textkeys/macostextkeys/MacTextKeys.java
+git commit -m "fix(dictation): no-op InputMethodListener — sentetik keyTyped kapanır, dikte commit'i temiz akar"
+```
+
+### Task 4 (revize): Repaketle + attach doğrulaması
+
+**Files:**
+- Create (geçici, repo dışı): `/tmp/dictsim/src/DictSim3.java`
+
+- [ ] **Step 1: Paketle**
+
+Run: `bash scripts/build.sh package`
+Expected: `Paketlendi: …/build/Uyap Doküman Editörü.app`.
+(Jar yamaları değişmedi; yalnız agent jar yenilendi — download/patch gerekmez.)
+
+- [ ] **Step 2: Yamalı uygulamayı başlat, DictSim3 ile doğrula**
+
+DictSim3 = DictSim2'nin listener EKLEMEYEN varyantı: editörü bulur, agent'ın
+listener'ı odakla takması için sentetik FOCUS_GAINED dispatch eder,
+`getInputMethodListeners().length`'i loglar, sonra aynı IME dizisini
+(composed×2 → commit → kapanış → ölü tuş → iptal) sürer.
 
 Run:
 ```bash
-cd /Users/saidsurucu/Documents/GitHub/ude-mac-arm
-rm -rf build/_dicttest && mkdir -p build/_dicttest
-javac --release 11 -encoding UTF-8 -d build/_dicttest \
-    scripts/macos-dictation/macosdict/DictationGuard.java tests/DictationGuardTest.java
-java -Djava.awt.headless=true -cp build/_dicttest DictationGuardTest
+pkill -f UyapDokumanEditoru; sleep 1
+(UDE_DICTLOG=1 "build/Uyap Doküman Editörü.app/Contents/MacOS/UyapDokumanEditoru" >/tmp/ude-stdout.log 2>&1 &)
+sleep 12
+J11="$(/usr/libexec/java_home -v 11)"
+: > /tmp/ude-dict-test.log
+"$J11/bin/java" -cp /tmp/dictsim/out AttachMain "$(pgrep -f UyapDokumanEditoru | head -1)" /tmp/dictsim/dictsim3.jar
+sleep 3; cat /tmp/ude-dict-test.log
 ```
-Expected: her senaryo `… OK`, son satır `Tüm testler geçti.`, çıkış kodu 0.
+Expected: `imListeners=1` (agent takmış), commit sonrası belge tam metin
+("deneme bir iki"), EDT-HATA YOK, ölü tuş `â`, iptal temiz.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Geçici dosyaları temizle**
 
-```bash
-git add scripts/macos-dictation/macosdict/DictationGuard.java
-git commit -m "feat(dictation): DictationGuard — IME olaylarını düz-metin yoluyla işle"
-```
+Run: `pkill -f UyapDokumanEditoru; rm -rf /tmp/dictsim /tmp/ude-dict-test.log /tmp/ude-stdout.log /tmp/JTextComponent.java /tmp/ude-ime-probe`
 
-### Task 5: `DictationPatch` Javassist yaması
+### Task 5 (revize): Dokümantasyon + kullanıcı canlı dikte testi
 
 **Files:**
-- Create: `scripts/macos-dictation/DictationPatch.java`
+- Modify: `README.md` (özellik listesi, ~87. satır bölgesi)
+- Modify: `CLAUDE.md` (mekanizma notu)
 
-`ImageResizePatch` deseni: hedef sınıf varsayılan `hj` (Faz 1 `hiyerarşi:` logu
-farklı sınıf gösterdiyse `HJ` sabiti onunla değiştirilir).
+- [ ] **Step 1: README + CLAUDE.md güncelle**
 
-- [ ] **Step 1: DictationPatch.java'yı yaz**
-
-```java
-import javassist.ClassPool;
-import javassist.CtClass;
-import javassist.CtMethod;
-import javassist.CtNewMethod;
-
-import java.io.File;
-import java.io.FileOutputStream;
-
-/**
- * UDE macOS dikte (DICTFIX=1) build-zamanı bytecode yaması.
- * Hedef: tr…editor.common.text.hj (editör metin bileşeni, JTextPane torunu).
- *   processInputMethodEvent(InputMethodEvent): yoksa override EKLENİR, varsa
- *   başına guard girilir — DictationGuard.handle true dönerse olay işlenmiştir,
- *   Swing'in composed-text makinesi (UDE doküman katmanını patlatan yol) çalışmaz.
- *
- * ÖN KOŞUL: macosdict/DictationGuard.class jar'a ÖNCEDEN enjekte edilmiş olmalı
- * (javassist çağrı derlemesi sınıfı jar classpath'inden çözer).
- *
- * Argümanlar: <editor-app.jar> <out-dir>
- */
-public class DictationPatch {
-    private static final String HJ = "tr.com.havelsan.uyap.system.editor.common.text.hj";
-    private static final String GUARD = "macosdict.DictationGuard";
-
-    public static void main(String[] args) throws Exception {
-        if (args.length != 2) {
-            System.err.println("Kullanım: DictationPatch <jar> <out-dir>");
-            System.exit(2);
-        }
-        ClassPool pool = ClassPool.getDefault();
-        pool.insertClassPath(args[0]);
-        File outDir = new File(args[1]);
-
-        CtClass hj = pool.get(HJ);
-        CtClass ime = pool.get("java.awt.event.InputMethodEvent");
-        try {
-            CtMethod m = hj.getDeclaredMethod("processInputMethodEvent", new CtClass[]{ime});
-            m.insertBefore("{ if (" + GUARD + ".handle(this, $1)) return; }");
-            System.out.println("[DictationPatch] processInputMethodEvent: mevcut metoda guard eklendi.");
-        } catch (javassist.NotFoundException nf) {
-            hj.addMethod(CtNewMethod.make(
-                "protected void processInputMethodEvent(java.awt.event.InputMethodEvent e) {"
-              + "  if (" + GUARD + ".handle(this, e)) return;"
-              + "  super.processInputMethodEvent(e);"
-              + "}", hj));
-            System.out.println("[DictationPatch] processInputMethodEvent: override eklendi.");
-        }
-
-        writeClass(hj, outDir);
-        System.out.println("[DictationPatch] hj yamalandı.");
-    }
-
-    private static void writeClass(CtClass cc, File outDir) throws Exception {
-        byte[] code = cc.toBytecode();
-        File f = new File(outDir, cc.getName().replace('.', '/') + ".class");
-        f.getParentFile().mkdirs();
-        try (FileOutputStream fos = new FileOutputStream(f)) {
-            fos.write(code);
-        }
-    }
-}
-```
-
-(Javassist gövde string'lerinde `//` yorum YASAK — bilinen tuzak; yukarıdaki
-gövdelerde yok.)
+README özellik cümlesine "macOS dikte düzeltmesi" eklenir. CLAUDE.md'ye kısa
+bölüm: kök neden (sentetik keyTyped × ComposedTextCaret cast), çözüm
+(DictationFix no-op listener), teşhis araçları (DictationProbe UDE_DICTLOG=1,
+dynamic attach DictSim deseni).
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add scripts/macos-dictation/DictationPatch.java
-git commit -m "feat(dictation): DictationPatch — processInputMethodEvent Javassist sarması"
+git add README.md CLAUDE.md
+git commit -m "docs(dictation): README özellik + CLAUDE.md dikte mekanizma notu"
 ```
 
-### Task 6: build.sh entegrasyonu (`DICTFIX` bayrağı)
-
-**Files:**
-- Modify: `scripts/build.sh` (4 nokta: bayrak ~52. satır, kaynak yolu ~37. satır, `apply_dictfix` fonksiyonu, `patch_jar` çağrısı + yardım metni ~723. satır)
-
-- [ ] **Step 1: Bayrak ve kaynak yolu değişkenlerini ekle**
-
-`SKIN="${SKIN:-1}"` satırının (52) hemen altına:
-
-```bash
-DICTFIX="${DICTFIX:-1}" # 1=açık (varsayılan; macOS dikte IME düzeltmesi) | 0=kapalı
-```
-
-`TEXTKEYS_SRC="$SCRIPT_DIR/macos-textkeys"` satırının (37) hemen altına:
-
-```bash
-DICT_SRC="$SCRIPT_DIR/macos-dictation"
-```
-
-- [ ] **Step 2: apply_dictfix fonksiyonunu ekle**
-
-`apply_imgresize()` fonksiyonunun bitiminden hemen sonra (apply_skin'den önce):
-
-```bash
-apply_dictfix() {  # $1=JAR — patch_jar içinden çağrılır
-	local JAR="$1"
-	[ "$DICTFIX" = "1" ] || return 0
-	# İdempotans: helper zaten enjekte edilmişse atla.
-	# grep -q DEĞİL (SIGPIPE/pipefail tuzağı): grep tüm girdiyi okuyup >/dev/null'a yazar.
-	if unzip -l "$JAR" 2>/dev/null | grep 'macosdict/DictationGuard.class' >/dev/null 2>&1; then
-		c_ok "[dictfix] zaten yamalı, atlandı."; return 0
-	fi
-	c_info "[dictfix] macOS dikte (IME) yaması…"
-	local jr jc jvs
-	jr="$(java17)"  || { c_warn "[dictfix] 17+ java yok, yama atlandı."; return 0; }
-	jc="$(javac17)" || { c_warn "[dictfix] 17+ javac yok, yama atlandı."; return 0; }
-	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
-	# 1) guard helper'ı derle + jar'a enjekte et (patcher'dan ÖNCE; handle
-	#    çağrısı derlemesi guard'ı jar classpath'inden çözer)
-	rm -rf "$BUILD/_dicthelper"; mkdir -p "$BUILD/_dicthelper"
-	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_dicthelper" "$DICT_SRC/macosdict/DictationGuard.java" \
-		|| { c_warn "[dictfix] DictationGuard derlenemedi; yama atlandı."; return 0; }
-	( cd "$BUILD/_dicthelper" && zip -q -r "$JAR" macosdict )
-	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
-	rm -rf "$BUILD/_dictpatch"; mkdir -p "$BUILD/_dictpatch/out"
-	"$jc" --release 11 -encoding UTF-8 -cp "$jvs" -d "$BUILD/_dictpatch" "$DICT_SRC/DictationPatch.java" \
-		|| { c_warn "[dictfix] DictationPatch derlenemedi; yama atlandı."; return 0; }
-	if ! "$jr" -cp "$BUILD/_dictpatch:$jvs" DictationPatch "$JAR" "$BUILD/_dictpatch/out"; then
-		# Yarım-yama bırakma: helper'ı geri çıkar ki idempotans kontrolü yanılmasın.
-		zip -q -d "$JAR" 'macosdict/*' >/dev/null 2>&1 || true
-		c_warn "[dictfix] hj yaması uygulanamadı (UDE sürümü değişmiş olabilir); yama geri alındı."
-		return 0
-	fi
-	( cd "$BUILD/_dictpatch/out" && zip -q -r "$JAR" tr )
-	c_ok "[dictfix] dikte yaması uygulandı."
-}
-```
-
-- [ ] **Step 3: patch_jar'a çağrıyı ekle**
-
-`patch_jar()` içinde `apply_imgresize "$JAR"` satırından hemen sonra
-(`apply_skin "$JAR"`'dan önce — ikisi de `hj`'yi yamalar, sıralı JVM'ler
-olduğundan çakışmaz, ama dictfix imgresize'dan SONRA koşmalı ki ikisinin
-çıktısı da jar'da kalsın):
-
-```bash
-	apply_dictfix "$JAR"
-```
-
-- [ ] **Step 4: Yardım metnine ekle**
-
-`usage` içinde `SKIN (…)` açıklamasının yanına (≈727. satır bölgesi):
-
-```
-       DICTFIX (1=açık varsayılan | 0=kapalı; macOS dikte — IME olaylarını
-                editörün taşıyamadığı composed-text makinesi yerine düz metin
-                yoluyla işler; metin kaybı + donma düzeltmesi)
-```
-
-- [ ] **Step 5: Yamanın jar'a işlendiğini doğrula**
-
-Run:
-```bash
-cd /Users/saidsurucu/Documents/GitHub/ude-mac-arm
-bash scripts/build.sh download && bash scripts/build.sh patch
-JAR="build/_src/app/Contents/Java/editor-app.jar"
-unzip -l "$JAR" | grep macosdict
-"build/Uyap Doküman Editörü.app/Contents/runtime/Contents/Home/bin/javap" -classpath "$JAR" -p tr.com.havelsan.uyap.system.editor.common.text.hj | grep processInputMethodEvent || \
-javap -classpath "$JAR" -p tr.com.havelsan.uyap.system.editor.common.text.hj | grep processInputMethodEvent
-```
-Expected: `macosdict/DictationGuard.class` listede; javap çıktısında
-`protected void processInputMethodEvent(java.awt.event.InputMethodEvent)` var.
-(Jar'ı dosya sistemine AÇMA — case-insensitive FS `kx/kX` sınıflarını ezer;
-javap'ı doğrudan jar'a karşı çalıştır.)
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add scripts/build.sh
-git commit -m "feat(dictation): build.sh DICTFIX bayrağı + apply_dictfix yaması"
-```
-
-### Task 7: Tam build + canlı doğrulama (KULLANICI) + dokümantasyon
-
-**Files:**
-- Modify: `README.md:87` bölgesi (özellik listesine dikte düzeltmesi)
-- Modify: `CLAUDE.md` (yeni mekanizma notu — kısa)
-
-- [ ] **Step 1: Tam build**
-
-Run:
-```bash
-cd /Users/saidsurucu/Documents/GitHub/ude-mac-arm
-bash scripts/build.sh download && bash scripts/build.sh patch && bash scripts/build.sh lookagent && bash scripts/build.sh package
-```
-Expected: hatasız; `[dictfix] dikte yaması uygulandı.` satırı görünür.
-
-- [ ] **Step 2: Kullanıcı canlı doğrulaması — DUR ve sonuç bekle**
+- [ ] **Step 3: Kullanıcı canlı doğrulaması — DUR ve sonuç bekle**
 
 ```bash
 pkill -f UyapDokumanEditoru; sleep 1
 UDE_DICTLOG=1 "build/Uyap Doküman Editörü.app/Contents/MacOS/UyapDokumanEditoru"
 ```
+Kontrol: (1) dikteyle 2-3 cümle + dikteyi kapat → metin kalıcı, donma yok;
+(2) `^`+a → â; (3) ⌃⌘Space emoji; (4) normal yazım + ğüşıöç; (5) ⌘Z;
+(6) Option+Delete, @ # [ ], ⌘B/⌘S regresyonu.
 
-Kontrol listesi:
-1. **Dikte:** 2-3 cümle söyle, dikteyi kapat → metin **kalıcı**, donma **yok**.
-2. **Ölü tuş:** `^` sonra `a` → `â` yazılır ("hâkim" denenir); `î`, `û` de.
-3. **Emoji seçici:** ⌃⌘Space ile emoji ekle → yazılır.
-4. **Normal yazım + Türkçe karakterler** (ğüşıöç) etkilenmemiş.
-5. **Geri al:** dikteden sonra ⌘Z çalışıyor (adım adım geri alma kabul).
-6. **Regresyon:** Option+Delete (kelime sil), Option+karakterler (@ # [ ]),
-   ⌘B/⌘S kısayolları çalışıyor (MacTextKeys/MacOptionChars etkileşimi).
+- [ ] **Step 4: Branch'i bitir**
 
-Sorun çıkarsa `~/Library/Logs/ude-dictation.txt` (`GUARD-HATA` satırları) incelenir.
-
-- [ ] **Step 3: README ve CLAUDE.md güncelle**
-
-README.md 87. satırdaki özellik cümlesine "macOS dikte düzeltmesi" eklenir
-(mevcut üslupla, kalın). CLAUDE.md'ye "## Dikte (DICTFIX=1)" altında 5-6
-satırlık mekanizma özeti eklenir: hedef sınıf, guard sözleşmesi (false=statüko),
-ölü tuş/emoji aynı yoldan, log bayrağı `UDE_DICTLOG=1`, Faz 1 bulgusunun özeti.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add README.md CLAUDE.md
-git commit -m "docs(dictation): README özellik listesi + CLAUDE.md mekanizma notu"
-```
-
-- [ ] **Step 5: Branch'i bitir**
-
-superpowers:finishing-a-development-branch skill'i ile devam edilir
-(main'e merge önerisi; kullanıcı onayıyla).
+superpowers:finishing-a-development-branch ile devam (main'e merge, kullanıcı onayıyla).

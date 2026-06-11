@@ -125,6 +125,40 @@ override'ı** ile yapılır:
    davranışları (Option karakterleri aynı klavye yolunda — etkileşim
    kontrolü).
 
+## EK — Faz 1 bulgusu ve revize düzeltme (2026-06-11, dynamic attach teşhisi)
+
+Canlı JVM'e attach ile composed→commit IME dizisi simüle edildi
+(`/tmp/dictsim`, DictSim/DictSim2 agent'ları). **H2 birebir yeniden üretildi
+ve mekanizma netleşti:**
+
+- Editör bileşeni `text.t` (< `fi` < `hj` < … < `JTextPane`); composed metin
+  sorunsuz görüntüleniyor.
+- **Kök neden:** commit'te `JTextComponent.replaceInputMethodText`, committed
+  karakterleri **sentetik KEY_TYPED** olarak işler (pasif istemci varsayımı).
+  UDE'nin kelime-denetim zinciri (`im.keyTyped → fi.a → wp.model.v.d →
+  fireChangedUpdate → hB.changedUpdate → hj.a → gui.aC.a`) `getCaret()`'i
+  kendi `text.l` tipine cast eder; o anda caret Swing'in geçici
+  `ComposedTextCaret`'i olduğundan **ClassCastException** → commit yarıda
+  kesilir → "deneme bir iki" belgede "Deneme" kalır (metin kaybı). Gerçek
+  diktede bu EDT istisnası CInputMethod akışını yarıda bırakıp donmaya yol
+  açar. `getCaret()→(l)` cast'i jar'da onlarca yerde var → cast'leri tek tek
+  korumak (cerrahi seçenek) elenmiştir.
+- **Revize düzeltme (deneyle kanıtlı):** `JTextComponent`, bileşende kayıtlı
+  bir `InputMethodListener` varsa (`addInputMethodListener` →
+  `needToSendKeyTypedEvent=false`) sentetik keyTyped üretmez; committed metin
+  `mapCommittedTextToAction` ile editör kit'inin normal yazma aksiyonundan
+  akar. Canlı testte no-op listener takılınca: commit tam metinle kalıcı,
+  ölü tuş `^`→`â` doğru, iptal temiz, istisna yok.
+- **Yeni Faz 2:** Javassist yaması + `DICTFIX` bayrağı + `DictationGuard`
+  İPTAL. Yerine `macostextkeys.DictationFix` (javaagent ailesi): her
+  düzenlenebilir `JTextComponent` odaklandığında no-op `InputMethodListener`
+  ekler (idempotent — kendi listener'ı zaten varsa eklemez). Vendor jar'a
+  dokunulmaz; build yamasına gerek yoktur.
+- Bilinen küçük davranış farkı: IME'den commit edilen metin UDE'nin
+  `keyTyped` işleyicilerinden (otomatik büyük harf, anlık yazım işareti)
+  geçmez — bu yol zaten çalışmıyordu (crash); normal klavye yazımı
+  etkilenmez.
+
 ## Kapsam dışı
 
 - JRE yükseltme (yalnız H1 kanıtlanırsa ayrı iş).
