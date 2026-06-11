@@ -107,14 +107,17 @@ override'ı** ile yapılır:
   durum = statüko; asla daha kötüsü değil.
 - Build bayrağı `DICTFIX=1` (varsayılan açık, `SKIN`'den bağımsız);
   gerekirse kullanıcıya `DICTFIX=0` build'i verilebilir.
-- Teşhis logu üretimde sessiz; `-Dmacosdict.debug=1` ile açılır.
+- Teşhis logu üretimde sessiz; `UDE_DICTLOG=1` ortam değişkeniyle açılır
+  (agent ailesindeki `UDE_KEYLOG` deseni — launcher java-options'a dokunmadan
+  son kullanıcı da açabilir).
 
 ## Test
 
-1. **Ekran-dışı otomatik ön doğrulama (DlgProbe deseni):** yamalı jar'a
-   karşı sentetik `InputMethodEvent` dizisi (`component.dispatchEvent`)
-   composed→committed senaryosunu oynatır; belge içeriği beklenenle
-   karşılaştırılır. Build-test döngüsüne girmeden mantık doğrulanır.
+1. **Ekran-dışı otomatik ön doğrulama:** `DictationGuard` yalnız
+   `javax.swing.text` API'si kullandığından düz bir `JTextArea` üzerinde
+   sentetik `InputMethodEvent` dizisiyle (composed→committed, ölü tuş,
+   iptal) jar'sız test edilir; yama kablolaması ayrıca `javap -classpath
+   <jar>` ile (`processInputMethodEvent` override'ı) doğrulanır.
 2. **Canlı test (repo sahibi):** dikteyle çok cümleli yazım + dikteyi
    kapatma (metin kalıcı mı, donma var mı), â/î/û ölü tuşları, normal
    yazım, geri al (⌘Z), emoji seçici.
