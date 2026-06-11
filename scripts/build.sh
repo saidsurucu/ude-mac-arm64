@@ -52,6 +52,7 @@ PASTEIMG="${PASTEIMG:-1}" # 1=açık (varsayılan; panodan imaj yapıştırma ma
 IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçlarıyla boyutlandırma) | 0=kapalı
 SKIN="${SKIN:-1}"       # 1=açık (varsayılan; modern düz Substance skin + Flamingo şerit + font + teal arka plan nötr gri) | 0=kapalı
 LIVETOGGLE="${LIVETOGGLE:-1}" # 1=açık (varsayılan; Otomatik Büyük Harf vb. toggle'lar restart'sız etkin) | 0=kapalı
+TEXTREPLACE="${TEXTREPLACE:-1}" # 1=açık (varsayılan; macOS Metin Değiştirme kısayolları UDE'de) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -647,6 +648,9 @@ package() {
 		lookopts=(--java-options '-javaagent:$APPDIR/macos-look.jar' \
 			--java-options '-Dapple.awt.application.appearance=system')
 	fi
+	# TEXTREPLACE=0: macOS Metin Değiştirme genişleticisi kapalı (agent kuruluma hiç girmez).
+	local tropts=()
+	[ "$TEXTREPLACE" = "1" ] || tropts=(--java-options '-Dmacostextreplace.off=1')
 	local icns; icns="$(ls "$SRC_APP_DIR/app/Contents/Resources/"*.icns 2>/dev/null | head -1)"
 	local ude_ver; ude_ver="$(plutil -extract CFBundleVersion raw "$SRC_APP_DIR/app/Contents/Info.plist" 2>/dev/null || echo 1.0)"
 	local assoc="$BUILD/_udf.properties"
@@ -665,6 +669,7 @@ package() {
 		--java-options '-javaagent:$APPDIR/macos-textkeys.jar' \
 		--java-options '-javaagent:$APPDIR/macos-zoom.jar' \
 		${lookopts[@]+"${lookopts[@]}"} \
+		${tropts[@]+"${tropts[@]}"} \
 		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC' \
 		--java-options -Xms128M --java-options -Xmx4096M \
 		--java-options -XX:+UnlockExperimentalVMOptions \
