@@ -45,6 +45,9 @@ public class SkinPatch {
           + "      macosskin.WordTooltip.install();"
           + "      macosskin.WordCombo.install();"
           + "      macosskin.WordCheck.install();"
+          + "      macosskin.WordButton.install();"
+          + "      macosskin.WordTabs.install();"
+          + "      macosskin.WordField.install();"
           + "      macosskin.DarkMode.trace(\"skin kuruldu ok=\" + __ok + \" dark=\" + macosskin.DarkMode.isDark());"
           + "      try {"
           + "        org.jvnet.substance.fonts.FontSet __base ="
@@ -84,6 +87,9 @@ public class SkinPatch {
           + "        macosskin.WordTooltip.install();"
           + "        macosskin.WordCombo.install();"
           + "      macosskin.WordCheck.install();"
+          + "      macosskin.WordButton.install();"
+          + "      macosskin.WordTabs.install();"
+          + "      macosskin.WordField.install();"
           + "        try {"
           + "          org.jvnet.substance.fonts.FontSet __base ="
           + "            org.jvnet.substance.SubstanceLookAndFeel.getFontPolicy().getFontSet(\"Substance\", null);"
@@ -169,7 +175,7 @@ public class SkinPatch {
                             f.replace(
                                 "{ $_ = macosskin.DarkMode.isDark()"
                               + "    ? new java.awt.Color(38, 38, 38)"
-                              + "    : ($r) $proceed(); }");
+                              + "    : new java.awt.Color(223, 223, 223); }");
                         }
                     } catch (javassist.NotFoundException __nf) {
                     }
@@ -209,7 +215,7 @@ public class SkinPatch {
                 .setBody(
                     "{ return macosskin.DarkMode.isDark()"
                   + "    ? new java.awt.Color(74, 74, 74)"
-                  + "    : new java.awt.Color(186, 192, 200); }");
+                  + "    : new java.awt.Color(198, 198, 198); }");
             writeClass(fu, outDir);
             System.out.println("[SkinPatch] Flamingo kontur rengi grafite çekildi.");
         } catch (Throwable t) {
@@ -319,9 +325,12 @@ public class SkinPatch {
             System.out.println("[SkinPatch] UYARI: komut buton dolgusu atlandı: " + t);
         }
 
-        // Koyu modda ikon aydınlatma: Utils.b(String) ikon yükleyicisinin
-        // dönüşünü IconDarken'dan geçir (apply_icons'un multi-res sarması bu
-        // noktada jar'da; biz onun ÜSTÜNE eklenir). Açık modda no-op.
+        // İkon mod-duyarlılığı: Utils yükleyicilerinin dönüşü ModeAwareImage
+        // ile sarılır (apply_icons'un multi-res sarması bu noktada jar'da;
+        // biz onun ÜSTÜNE eklenir). Aydınlatma paint anında moda göre yapılır
+        // — Görünüm > Renk modu canlı geçişi. Ölçekleme yolu (hızlı erişim)
+        // ModeAwareImage'i tanımalı: insertBefore, apply_icons'un kendi
+        // insertBefore'undan ÖNCE çalışır (Javassist en son ekleneni başa koyar).
         try {
             CtClass utils = pool.get("tr.com.havelsan.uyap.system.editor.common.Utils");
             utils.getMethod("b", "(Ljava/lang/String;)Ljavax/swing/ImageIcon;")
@@ -330,6 +339,12 @@ public class SkinPatch {
                 .insertAfter("{ $_ = macosskin.IconDarken.apply($_); }");
             utils.getMethod("a", "(Ljava/lang/String;I)Ljavax/swing/ImageIcon;")
                 .insertAfter("{ $_ = macosskin.IconDarken.apply($_); }");
+            utils.getMethod("a", "(Ljavax/swing/ImageIcon;II)Ljavax/swing/ImageIcon;")
+                .insertBefore(
+                    "{ if ($1 != null && $1.getImage() instanceof macosskin.ModeAwareImage) {"
+                  + "    javax.swing.ImageIcon __r = macosskin.IconDarken.scaleIcon($1, $2, $3);"
+                  + "    if (__r != null) return __r;"
+                  + "  } }");
             writeClass(utils, outDir);
             System.out.println("[SkinPatch] koyu mod ikon aydınlatma eklendi (b, a, a-int).");
         } catch (Throwable t) {
@@ -355,13 +370,61 @@ public class SkinPatch {
         // çizimi) ve son bileşenden panel sonuna alt çizgi. Koyu temada bunlar
         // ikon gruplarının arasında saçma eğri/dik ayrım çizgileri olarak görünür.
         // Dekorasyon tamamen kalkar; butonlar paintChildren ile zaten çizilir.
+        // Ek görev: MacLook agent'ı yerel macOS başlığını devralıp temizlenmiş
+        // halini rootpane "macoslook.title" özelliğine koyar (yerel metin dar
+        // pencerede ikonların üstüne kayıyordu) — burada o başlık panelde
+        // ortalanır, son bileşenin sağına KLEMPLENIR ve sığmazsa kırpılır;
+        // ikonlarla çakışma yapısal olarak imkânsız. Agent yoksa özellik boş
+        // kalır, hiçbir şey çizilmez (yerel başlık da gizlenmemiş olur).
         try {
             CtClass tbPanel = pool.get(
                 "org.pushingpixels.flamingo.internal.ui.ribbon.BasicRibbonUI$TaskbarPanel");
             tbPanel.getMethod("paintComponent", "(Ljava/awt/Graphics;)V")
-                .setBody("{ }");
+                .setBody(
+                    "{ javax.swing.JRootPane __rp = javax.swing.SwingUtilities.getRootPane(this);"
+                  + "  Object __t = (__rp == null) ? null : __rp.getClientProperty(\"macoslook.title\");"
+                  + "  if (__t == null) return;"
+                  + "  String __s = __t.toString();"
+                  + "  if (__s.length() == 0) return;"
+                  + "  int __maxx = 0;"
+                  + "  java.awt.Component[] __ks = getComponents();"
+                  + "  for (int __i = 0; __i < __ks.length; __i++) {"
+                  + "    if (__ks[__i].isVisible()) {"
+                  + "      int __r = __ks[__i].getX() + __ks[__i].getWidth();"
+                  + "      if (__r > __maxx) __maxx = __r;"
+                  + "    }"
+                  + "  }"
+                  + "  int __pad = 12;"
+                  + "  int __avail = getWidth() - __maxx - (2 * __pad);"
+                  + "  if (__avail < 30) return;"
+                  + "  java.awt.Graphics2D __g = (java.awt.Graphics2D) $1.create();"
+                  + "  __g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,"
+                  + "      java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);"
+                  + "  java.awt.Font __f = javax.swing.UIManager.getFont(\"Label.font\");"
+                  + "  if (__f != null) __g.setFont(__f.deriveFont(java.awt.Font.BOLD, 13.0f));"
+                  + "  java.awt.Color __fg = javax.swing.UIManager.getColor(\"Label.foreground\");"
+                  + "  if (__fg != null) __g.setColor(__fg);"
+                  + "  java.awt.FontMetrics __fm = __g.getFontMetrics();"
+                  + "  if (__fm.stringWidth(__s) > __avail) {"
+                  + "    int __ew = __fm.stringWidth(\"...\");"
+                  + "    StringBuilder __sb = new StringBuilder();"
+                  + "    int __w = 0;"
+                  + "    for (int __j = 0; __j < __s.length(); __j++) {"
+                  + "      int __cw = __fm.charWidth(__s.charAt(__j));"
+                  + "      if (__w + __cw + __ew > __avail) break;"
+                  + "      __w += __cw;"
+                  + "      __sb.append(__s.charAt(__j));"
+                  + "    }"
+                  + "    __s = __sb.append(\"...\").toString();"
+                  + "  }"
+                  + "  int __tw = __fm.stringWidth(__s);"
+                  + "  int __x = (getWidth() - __tw) / 2;"
+                  + "  if (__x < __maxx + __pad) __x = __maxx + __pad;"
+                  + "  int __y = ((getHeight() - __fm.getHeight()) / 2) + __fm.getAscent();"
+                  + "  __g.drawString(__s, __x, __y);"
+                  + "  __g.dispose(); }");
             writeClass(tbPanel, outDir);
-            System.out.println("[SkinPatch] hızlı erişim kontur/ayraç çizgileri kaldırıldı.");
+            System.out.println("[SkinPatch] hızlı erişim: dekor kaldırıldı + başlık çizimi eklendi.");
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: hızlı erişim kontur yaması atlandı: " + t);
         }
@@ -652,6 +715,25 @@ public class SkinPatch {
             System.out.println("[SkinPatch] popup menü ikon oluğu düzlendi.");
         } catch (Throwable t) {
             System.out.println("[SkinPatch] UYARI: ikon oluğu yaması atlandı: " + t);
+        }
+
+        // Bul/Değiştir diyaloğu (gui.jc) "Seçenekler" grubu: TitledBorder'a
+        // EtchedBorder (3B oymalı, beyaz vurgu çizgili Win95 izi) sarılıyor —
+        // Word düz görünümü için tema-duyarlı tek ince LineBorder'a çevrilir.
+        try {
+            CtClass jc = pool.get("tr.com.havelsan.uyap.system.editor.common.gui.jc");
+            jc.instrument(new ExprEditor() {
+                public void edit(javassist.expr.NewExpr e)
+                        throws javassist.CannotCompileException {
+                    if ("javax.swing.border.EtchedBorder".equals(e.getClassName())) {
+                        e.replace("{ $_ = new macosskin.FlatEtchedBorder(); }");
+                    }
+                }
+            });
+            writeClass(jc, outDir);
+            System.out.println("[SkinPatch] Bul/Değiştir grup çerçevesi düzlendi.");
+        } catch (Throwable t) {
+            System.out.println("[SkinPatch] UYARI: grup çerçevesi yaması atlandı: " + t);
         }
     }
 

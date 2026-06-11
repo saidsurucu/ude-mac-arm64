@@ -17,22 +17,60 @@ import java.util.List;
 public final class IconDarken {
     private IconDarken() {}
 
+    /** İkonu mod-duyarlı dinamik görüntüyle sarar (çift sarmaya karşı korumalı).
+     *  Aydınlatma artık yükleme anında değil, ModeAwareImage içinde ilk koyu
+     *  çizimde yapılır — Görünüm > Renk modu canlı geçişi için. */
     public static javax.swing.ImageIcon apply(javax.swing.ImageIcon icon) {
-        if (icon == null || !DarkMode.isDark()) return icon;
+        if (icon == null) return icon;
         try {
             Image img = icon.getImage();
-            if (img instanceof BaseMultiResolutionImage) {
-                BaseMultiResolutionImage mr = (BaseMultiResolutionImage) img;
-                List<Image> out = new ArrayList<>();
-                for (Image v : mr.getResolutionVariants()) {
-                    out.add(lighten(v));
-                }
-                return new javax.swing.ImageIcon(
-                    new BaseMultiResolutionImage(out.toArray(new Image[0])));
-            }
-            return new javax.swing.ImageIcon(lighten(img));
+            if (img instanceof ModeAwareImage) return icon;
+            return new javax.swing.ImageIcon(new ModeAwareImage(img));
         } catch (Throwable t) {
             return icon;
+        }
+    }
+
+    /** Görüntünün koyu-mod (aydınlatılmış) kopyası; multi-res ise varyant
+     *  varyant dönüştürülür. ModeAwareImage'in koyu cache'i bunu çağırır. */
+    static Image lightenImage(Image img) {
+        if (img instanceof BaseMultiResolutionImage) {
+            BaseMultiResolutionImage mr = (BaseMultiResolutionImage) img;
+            List<Image> out = new ArrayList<>();
+            for (Image v : mr.getResolutionVariants()) {
+                out.add(lighten(v));
+            }
+            return new BaseMultiResolutionImage(out.toArray(new Image[0]));
+        }
+        return lighten(img);
+    }
+
+    /** Utils.a(ImageIcon,int,int) ölçekleme yolunun ModeAwareImage dalı
+     *  (SkinPatch insertBefore ile bağlanır): açık varyantlar ölçeklenir,
+     *  sonuç yine ModeAwareImage'e sarılır ki canlı mod geçişi hızlı erişim
+     *  ikonlarında da işlesin. Kaynak ModeAwareImage değilse null döner
+     *  (çağıran orijinal yola düşer). */
+    public static javax.swing.ImageIcon scaleIcon(javax.swing.ImageIcon icon,
+            int w, int h) {
+        try {
+            if (icon == null || w <= 0 || h <= 0) return null;
+            Image img = icon.getImage();
+            if (!(img instanceof ModeAwareImage)) return null;
+            Image light = ((ModeAwareImage) img).lightImage();
+            Image scaled;
+            if (light instanceof BaseMultiResolutionImage) {
+                BaseMultiResolutionImage mr = (BaseMultiResolutionImage) light;
+                Image lo = mr.getResolutionVariant(w, h)
+                    .getScaledInstance(w, h, Image.SCALE_SMOOTH);
+                Image hi = mr.getResolutionVariant(w * 2, h * 2)
+                    .getScaledInstance(w * 2, h * 2, Image.SCALE_SMOOTH);
+                scaled = new BaseMultiResolutionImage(new Image[] { lo, hi });
+            } else {
+                scaled = light.getScaledInstance(w, h, Image.SCALE_SMOOTH);
+            }
+            return new javax.swing.ImageIcon(new ModeAwareImage(scaled));
+        } catch (Throwable t) {
+            return null;
         }
     }
 

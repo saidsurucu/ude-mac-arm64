@@ -14,10 +14,50 @@ import java.util.concurrent.TimeUnit;
 public final class DarkMode {
     private static Boolean dark;
 
+    private static final java.util.prefs.Preferences PREFS =
+        java.util.prefs.Preferences.userRoot().node("ude-mac-arm");
+    private static final String MODE_KEY = "colorMode";
+
     private DarkMode() {}
+
+    /** Kalıcı renk modu tercihi: "light" | "dark" | "system" (varsayılan).
+     *  Görünüm sekmesindeki "Renk modu" combo'su yazar (MacLook agent →
+     *  ModeSwitch.apply): canlı geçiş resetCache() + skin/delegate yeniden
+     *  kurulumuyla yapılır; ikonlar ModeAwareImage sayesinde paint anında
+     *  moda uyar. */
+    public static String getMode() {
+        try {
+            return PREFS.get(MODE_KEY, "system");
+        } catch (Throwable t) {
+            return "system";
+        }
+    }
+
+    public static void setMode(String mode) {
+        try {
+            PREFS.put(MODE_KEY, mode);
+            PREFS.flush();
+        } catch (Throwable t) {
+            trace("setMode HATA: " + t);
+        }
+    }
+
+    /** Canlı mod geçişi için: bir sonraki isDark() tercihi yeniden çözer. */
+    public static synchronized void resetCache() {
+        dark = null;
+    }
 
     public static synchronized boolean isDark() {
         if (dark == null) {
+            String mode = getMode();
+            if ("dark".equals(mode)) {
+                dark = Boolean.TRUE;
+                return true;
+            }
+            if ("light".equals(mode)) {
+                dark = Boolean.FALSE;
+                return false;
+            }
             boolean d = false;
             try {
                 Process p = Runtime.getRuntime().exec(
@@ -39,10 +79,11 @@ public final class DarkMode {
         return dark.booleanValue();
     }
 
-    /** Editör masaüstü (kanvas) rengi: açıkta nötr gri, koyuda Word-Mac
-     *  koyu yüzeyiyle aynı (#282828 — Word şerit=kanvas tek ton kullanır). */
+    /** Editör masaüstü (kanvas) rengi: açıkta Word-Mac açık kanvası
+     *  (#ECECEC piksel ölçümü), koyuda Word-Mac koyu yüzeyiyle aynı
+     *  (#282828 — Word şerit=kanvas tek ton kullanır). */
     public static Color canvasColor() {
-        return isDark() ? new Color(40, 40, 40) : new Color(228, 231, 235);
+        return isDark() ? new Color(40, 40, 40) : new Color(236, 236, 236);
     }
 
     /** -Dmacosskin.debug=1 ile teşhis izi (System.err uygulama tarafından yutulur; dosyaya yaz). */
