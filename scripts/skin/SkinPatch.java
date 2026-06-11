@@ -157,6 +157,11 @@ public class SkinPatch {
                 "{ if (macosskin.DarkMode.isDark()) return new java.awt.Color(152, 152, 158, 250); }");
             ruler.getMethod("c", "()Ljava/awt/Color;").insertBefore(
                 "{ if (macosskin.DarkMode.isDark()) return new java.awt.Color(152, 152, 158, 150); }");
+            javassist.CtConstructor[] rctors = ruler.getDeclaredConstructors();
+            for (int rci = 0; rci < rctors.length; rci++) {
+                rctors[rci].insertAfter(
+                    "{ this.setColor_border(macosskin.DarkMode.canvasColor()); }");
+            }
             ruler.instrument(new ExprEditor() {
                 public void edit(FieldAccess f) throws javassist.CannotCompileException {
                     try {

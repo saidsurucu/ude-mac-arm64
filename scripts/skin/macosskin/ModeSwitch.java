@@ -121,6 +121,14 @@ public final class ModeSwitch {
         for (Class<?> i : c.getClass().getInterfaces()) {
             if (i.getName().endsWith("IRuler")) {
                 c.setBackground(dark ? new Color(70, 70, 70) : Color.WHITE);
+                try {
+                    c.getClass().getMethod("setColor_unusableregion", Color.class)
+                        .invoke(c, DarkMode.canvasColor());
+                    c.getClass().getMethod("setColor_border", Color.class)
+                        .invoke(c, DarkMode.canvasColor());
+                } catch (Throwable ignore) {
+                }
+                c.repaint();
                 break;
             }
         }
