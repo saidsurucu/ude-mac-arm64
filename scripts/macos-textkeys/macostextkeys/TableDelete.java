@@ -1,7 +1,18 @@
 package macostextkeys;
 
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
+import java.lang.reflect.Method;
+
+import javax.swing.Action;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
+import javax.swing.KeyStroke;
+import javax.swing.text.Document;
 import javax.swing.text.Element;
+import javax.swing.text.JTextComponent;
 import javax.swing.text.StyledDocument;
+import javax.swing.text.TextAction;
 
 /**
  * Backspace/Delete ile tablo silme. UDE tabloları yalnız araç çubuğundaki
@@ -85,5 +96,112 @@ public final class TableDelete {
             return isEmptyTable(dv, inTable) ? inTable.getStartOffset() : -1;
         }
         return -1;
+    }
+
+    // ---- Aksiyon + bağlama + reflection (UDE çalışma anı) ----
+
+    private static final String KEY_BS  = "mac-table-aware-backspace";
+    private static final String KEY_DEL = "mac-table-aware-delete";
+    private static final String ORIG_BS  = "mac.orig.backspace";
+    private static final String ORIG_DEL = "mac.orig.delete";
+
+    /** MacTextKeys.applyBindings0'dan her odakta çağrılır (idempotent). */
+    public static void bind(JTextComponent tc) {
+        try {
+            InputMap im = tc.getInputMap();
+            ActionMap am = tc.getActionMap();
+            if (im == null || am == null) return;
+            bindOne(tc, im, am, KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), KEY_BS,  ORIG_BS,  BACKSPACE);
+            bindOne(tc, im, am, KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0),     KEY_DEL, ORIG_DEL, DELETE);
+        } catch (Throwable t) {
+            log("bind hata: " + t);
+        }
+    }
+
+    private static void bindOne(JTextComponent tc, InputMap im, ActionMap am,
+                                KeyStroke ks, String key, String origProp, Action action) {
+        Object cur = im.get(ks);
+        if (key.equals(cur)) return;               // zaten sarılı
+        tc.putClientProperty(origProp, cur);       // orijinal actionMapKey (null olabilir)
+        am.put(key, action);
+        im.put(ks, key);
+    }
+
+    private static final Action BACKSPACE = new TextAction(KEY_BS) {
+        @Override public void actionPerformed(ActionEvent e) {
+            JTextComponent tc = getTextComponent(e);
+            if (tc == null) return;
+            if (!tryDelete(tc, false)) delegate(tc, e, ORIG_BS, false);
+        }
+    };
+
+    private static final Action DELETE = new TextAction(KEY_DEL) {
+        @Override public void actionPerformed(ActionEvent e) {
+            JTextComponent tc = getTextComponent(e);
+            if (tc == null) return;
+            if (!tryDelete(tc, true)) delegate(tc, e, ORIG_DEL, true);
+        }
+    };
+
+    /** Tablo silme uygulanırsa true; aksi halde false (devret). */
+    private static boolean tryDelete(JTextComponent tc, boolean forward) {
+        if (!tc.isEditable() || !tc.isEnabled()) return false;
+        Document d = tc.getDocument();
+        if (!(d instanceof StyledDocument)) return false;
+        final StyledDocument sd = (StyledDocument) d;
+        DocView dv = new DocView() {
+            public Element charAt(int p) { return sd.getCharacterElement(p); }
+            public String text(int s, int len) {
+                try { return sd.getText(s, len); } catch (Throwable t) { return ""; }
+            }
+        };
+        int caret = tc.getCaretPosition();
+        int s = tc.getSelectionStart(), en = tc.getSelectionEnd();
+        int target = forward ? targetForDelete(dv, caret, s, en)
+                             : targetForBackspace(dv, caret, s, en);
+        if (target < 0) return false;
+        try {
+            Method f = d.getClass().getMethod("f", int.class);  // wp.model.v.f(int) (miras)
+            f.invoke(d, target);
+            int len = d.getLength();
+            tc.setCaretPosition(Math.min(target, len));
+            tc.requestFocus();
+            return true;
+        } catch (Throwable t) {
+            log("f(int) cagrilamadi: " + t);
+            return false;   // reflection başarısız → normal Backspace'e devret
+        }
+    }
+
+    /**
+     * Orijinal (yakalanmış) Backspace/Delete aksiyonuna devret. Orijinal
+     * bulunamazsa (beklenmez) güvenli geri-çekilme: seçim varsa sil, yoksa
+     * yön'e göre bir karakter sil.
+     */
+    private static void delegate(JTextComponent tc, ActionEvent e, String origProp, boolean forward) {
+        Object origKey = tc.getClientProperty(origProp);
+        Action orig = (origKey != null) ? tc.getActionMap().get(origKey) : null;
+        if (orig != null) { orig.actionPerformed(e); return; }
+        try {
+            int s = tc.getSelectionStart(), en = tc.getSelectionEnd();
+            if (s != en) { tc.getDocument().remove(s, en - s); return; }
+            int caret = tc.getCaretPosition();
+            if (forward && caret < tc.getDocument().getLength()) tc.getDocument().remove(caret, 1);
+            else if (!forward && caret > 0) tc.getDocument().remove(caret - 1, 1);
+        } catch (Throwable t) {
+            log("devir geri-cekilme hata: " + t);
+        }
+    }
+
+    /** UDE_TABLEDELLOG=1 iken ~/Library/Logs/ude-tabledelete.txt (System.err yutulur). */
+    private static void log(String msg) {
+        if (!"1".equals(System.getenv("UDE_TABLEDELLOG"))) return;
+        try {
+            java.io.File f = new java.io.File(System.getProperty("user.home"),
+                    "Library/Logs/ude-tabledelete.txt");
+            try (java.io.FileWriter w = new java.io.FileWriter(f, true)) {
+                w.write(msg + "\n");
+            }
+        } catch (Throwable ignore) {}
     }
 }
