@@ -118,7 +118,8 @@ ve tek tek build hedeflerini açıklar.
 
 Build, çalıştığı Mac'in mimarisini `uname -m` ile **otomatik algılar** (Apple Silicon=arm64,
 Intel=x86_64) ve gömülecek Java ile launcher'ı o mimari için üretir. Aşağıdaki çözümler
-arm64'ün özgün gerekçesiyle anlatılır; **2, 3, 6, 7, 8, 9, 11** maddeleri mimariden bağımsızdır
+arm64'ün özgün gerekçesiyle anlatılır; **yalnızca 1, 4 ve 5** maddeleri (launcher, sqlite,
+JNA) mimariye özgüdür — **geri kalan tüm maddeler (2, 3 ve 6–20) mimariden bağımsızdır**
 ve Intel'de de aynen geçerlidir. Madde 4 (sqlite) arm64'te zorunluydu (3.7.2'nin arm64
 native'i yoktu); Intel'de 3.7.2 zaten x86_64 native içerir ama tek tip build için 3.46.x'e
 geçiş orada da uygulanır (jar hem `Mac/aarch64` hem `Mac/x86_64` dylib taşır).
@@ -223,6 +224,51 @@ Resmî paket x86_64. Native arm64 için:
     küçük bir dinleyiciyle dikte metni editörün normal yazma yolundan işlenir;
     dikte edilen metin kalıcıdır, donma olmaz. Şapkalı harfler (`^`+a → â) ve
     emoji seçici (⌃⌘Space) etkilenmez.
+
+14. **PDF dışa aktarımında Türkçe harfler** (`FOPFONTS=1`, varsayılan açık) → "PDF Olarak
+    Kaydet" ile dışa aktarılan belgelerde `ğ ş ı İ` gibi Türkçe harfler kayboluyordu (sorun
+    platformdan bağımsız). UDE'nin gömülü Apache FOP motoru, Türkçe glifleri içermeyen
+    base-14 PDF fontlarını Cp1252 kodlamasıyla kullanıyordu; üstelik paketteki `fopconf.xml`
+    devrede değildi. Çözüm Javassist ile FOP'a Türkçe destekli bir font yapılandırması
+    (`setUserConfig`) enjekte etmek → tüm Türkçe harfler PDF'te doğru çıkar.
+
+15. **Native macOS dosya pencereleri** (`FILEDIALOG=1`, varsayılan açık) → Aç / Kaydet /
+    Farklı Kaydet eski görünümlü Java `JFileChooser` penceresini açıyordu. Javassist
+    yamasıyla bunlar macOS'un kendi `FileDialog`'una köprülenir → Finder kenar çubuğu,
+    iCloud Drive, son kullanılanlar ve `.udf` filtresi. (Sahipli/şeffaf başlık panelinin
+    pencereyi görünmez biçimde bloklaması ve pano `⌘V` sorunu native katmanda çözüldü.)
+
+16. **Satır-içi imaj tam çözünürlük** (`IMGFULL=1`, varsayılan açık) → Belgeye eklenen
+    görseller, ekleme anında sayfaya-sığdırma için ~600×790 piksele küçültülüp gömüldüğünden
+    Retina'da bulanıktı. UDE'nin imaj ekleme yolu (`utils.h.a`) Javassist ile bu yıkıcı
+    küçültmeyi yapmayacak şekilde değiştirilir (görsel tam çözünürlükte gömülür, görünen
+    boyut değişmez) ve çizimine bicubic interpolasyon eklenir → keskin.
+
+17. **Otomatik düzeltme seçenekleri anında etkin** (`LIVETOGGLE=1`, varsayılan açık) →
+    "Otomatik Büyük Harf", "Baş Harfleri Büyüt" ve "Kelime Denetimi" seçeneklerini açıp
+    kapatmak resmî pakette **uygulamayı yeniden başlatmayı** gerektiriyordu (seçenek yalnız
+    tercihi yazıp "yeniden başlatın" diyordu). Bu derlemede seçenek değiştirildiği anda
+    ilgili dinleyiciler tüm açık pencerelere eklenir/sökülür → yeniden başlatma gerekmez.
+
+18. **macOS Metin Değiştirme** (`TEXTREPLACE=1`, varsayılan açık) → **Sistem Ayarları →
+    Klavye → Metin Değiştirmeleri** kısayolları (ör. "mrb" → "Merhaba!") UDE'de çalışmıyordu
+    (macOS'un metin-denetim kanalı Java uygulamalarına kapalı). Bu derleme kısayol listenizi
+    okur ve bir sözcük tamamlandığında (boşluk/Enter/noktalama) eşleşen kısaltmayı belgede
+    genişletir. Küçük harfli kısaltma, ilk harfi büyük yazılışla da eşleşir.
+
+19. **Harici stilli yapıştırma** (`PASTERICH=1`, varsayılan açık) → Word, tarayıcı veya
+    PDF'den kopyalanan **biçimli** metin UDE'ye düz metin olarak yapışıyordu (UDE stilleri
+    yalnızca kendi iç pano biçiminde korur). Bu derleme pano HTML'ini okuyup
+    kalın/italik/altı çizili, font/boyut/renk/vurgu, hizalama/girinti ve **liste ile
+    tabloları** koruyarak belgeye ekler. (Tablolar yapı kaybı olmadan **gerçek** UDE
+    tablosu olarak kurulur; resimler de yapışır.) UYAP içi kopyalama eskisi gibi çalışır.
+
+20. **Antetlerim** (`ANTET=1`, varsayılan açık) → "Arka Plan Resmi Düzenleme" penceresine
+    kişisel **antet** bölümü eklenir: bir kez eklediğiniz antet görsellerini listeden seçip
+    tek tıkla belgeye basabilirsiniz. Görsel, sayfaya taşmadan **sığdırılarak** (contain-fit,
+    300 dpi hedefiyle, büyütmeden) yerleştirilir — resmî yolun görseli doğal boyutuyla gömüp
+    taşırması bu sayede önlenir. Antetler `~/Library/Application Support/UDE/Antetler`
+    altında saklanır.
 
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
