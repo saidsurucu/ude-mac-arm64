@@ -39,7 +39,7 @@ final class NativeInsert {
             javax.swing.text.JTextComponent tc = (javax.swing.text.JTextComponent) editor;
             StyledDocument doc = (StyledDocument) tc.getDocument();
             int pos = tc.getCaretPosition();
-            insertBlocks(doc, model.body, pos);
+            insertBlocks(editor, doc, model.body, pos);
             return true;
         } catch (Throwable t) {
             PrLog.log("NativeInsert.insert", t);
@@ -48,13 +48,13 @@ final class NativeInsert {
     }
 
     /** Blokları sırayla pos'a ekler; eklenen toplam uzunluğu döndürür. */
-    private static int insertBlocks(StyledDocument doc, List<Block> blocks, int pos) throws Exception {
+    private static int insertBlocks(Object editor, StyledDocument doc, List<Block> blocks, int pos) throws Exception {
         int start = pos;
         for (Block b : blocks) {
             if (b instanceof Paragraph) {
-                pos = insertParagraph(doc, (Paragraph) b, pos);
+                pos = insertParagraph(editor, doc, (Paragraph) b, pos);
             } else if (b instanceof Table) {
-                pos = insertTable(doc, (Table) b, pos);
+                pos = insertTable(editor, doc, (Table) b, pos);
             } else if (b instanceof UdeDoc.PageBreak) {
                 doc.insertString(pos, "\n", null);
                 pos += 1;
@@ -63,7 +63,7 @@ final class NativeInsert {
         return pos - start;
     }
 
-    private static int insertParagraph(StyledDocument doc, Paragraph para, int pos) throws Exception {
+    private static int insertParagraph(Object editor, StyledDocument doc, Paragraph para, int pos) throws Exception {
         int paraStart = pos;
         for (Run r : para.runs) {
             if (r instanceof TextRun) {
@@ -71,8 +71,10 @@ final class NativeInsert {
                 String t = clean(tr.text);
                 doc.insertString(pos, t, charAttrs(tr.style));
                 pos += t.length();
+            } else if (r instanceof UdeDoc.ImageRun) {
+                pos += insertImage(editor, doc, (UdeDoc.ImageRun) r, pos);
             }
-            // ImageRun/TabRun şimdilik atlanır (nadir; çökme yok)
+            // TabRun şimdilik atlanır
         }
         // paragraf öznitelikleri (hizalama)
         SimpleAttributeSet pa = new SimpleAttributeSet();
@@ -84,7 +86,7 @@ final class NativeInsert {
         return pos;
     }
 
-    private static int insertTable(StyledDocument doc, Table table, int pos) throws Exception {
+    private static int insertTable(Object editor, StyledDocument doc, Table table, int pos) throws Exception {
         int before = doc.getLength();
         int rows = table.rows.size();
         int cols = table.columns;
@@ -116,7 +118,7 @@ final class NativeInsert {
             collectCells(tableEl, table, jobs, cells);
             for (int i = jobs.size() - 1; i >= 0; i--) {
                 int off = jobs.get(i)[0];
-                fillCell(doc, cells.get(i), off);
+                fillCell(editor, doc, cells.get(i), off);
             }
         }
         // tablo + sonrası: yeni belge uzunluğu farkı kadar ilerle
@@ -125,9 +127,7 @@ final class NativeInsert {
     }
 
     /** Hücre içeriğini (paragraflar) hücrenin ilk-paragraf offset'ine yazar. */
-    private static void fillCell(StyledDocument doc, TableCell cell, int offset) throws Exception {
-        // hücre içeriğindeki ilk paragrafın run'larını tek satır olarak yaz
-        StringBuilder ignored = new StringBuilder();
+    private static void fillCell(Object editor, StyledDocument doc, TableCell cell, int offset) throws Exception {
         int pos = offset;
         boolean first = true;
         for (Block b : cell.content) {
@@ -142,6 +142,8 @@ final class NativeInsert {
                     String t = clean(tr.text);
                     doc.insertString(pos, t, charAttrs(tr.style));
                     pos += t.length();
+                } else if (r instanceof UdeDoc.ImageRun) {
+                    pos += insertImage(editor, doc, (UdeDoc.ImageRun) r, pos);
                 }
             }
             SimpleAttributeSet pa = new SimpleAttributeSet();
@@ -185,6 +187,39 @@ final class NativeInsert {
         if ("cell".equals(e.getName())) { out.add(e); return; }
         for (int i = 0; i < e.getElementCount(); i++) collectCellElements(e.getElement(i), out);
     }
+
+    /**
+     * Resim ekler: base64 → BufferedImage → sayfaya sığdır → editor.a(img,w,h)
+     * (UDE'nin caret'e resim-ekleme primitifi; canlı editör caret'i text.l olduğundan
+     * çalışır). Eklenen karakter sayısını (genelde 1) döndürür; başarısızsa 0.
+     */
+    private static int insertImage(Object editor, StyledDocument doc, UdeDoc.ImageRun ir, int pos) {
+        try {
+            if (ir.data == null || ir.data.isEmpty()) return 0;
+            byte[] bytes = java.util.Base64.getDecoder().decode(ir.data.trim());
+            java.awt.image.BufferedImage img =
+                    javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            if (img == null) { PrLog.log("resim decode edilemedi"); return 0; }
+            double w = img.getWidth(), h = img.getHeight();
+            double maxW = 480;   // sayfa yazılabilir genişliğine kaba sığdırma (pt)
+            if (w > maxW) { h = h * maxW / w; w = maxW; }
+            // caret'i ekleme noktasına al; UDE resmi caret'e ekler
+            ((javax.swing.text.JTextComponent) editor).setCaretPosition(pos);
+            int before = doc.getLength();
+            if (imageInsertM == null) {
+                imageInsertM = editor.getClass().getMethod("a",
+                        java.awt.image.BufferedImage.class, float.class, float.class);
+            }
+            imageInsertM.invoke(editor, img, (float) w, (float) h);
+            int delta = doc.getLength() - before;
+            return delta > 0 ? delta : 0;
+        } catch (Throwable t) {
+            PrLog.log("insertImage", t);
+            return 0;
+        }
+    }
+
+    private static Method imageInsertM;
 
     /**
      * HTML metin kuralı: paragraf-içi satır sonları (\r\n) BOŞLUKTUR, satır sonu
