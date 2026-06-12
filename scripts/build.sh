@@ -41,6 +41,7 @@ FD_SRC="$SCRIPT_DIR/macos-filedialog"   # native macOS dosya pencereleri yaması
 IMG_SRC="$SCRIPT_DIR/macos-imagefull"   # satır-içi imaj tam-çözünürlük (bulanıklık) yaması
 SKIN_SRC="$SCRIPT_DIR/skin"             # modern düz skin + Flamingo şerit paint yaması
 PASTE_SRC="$SCRIPT_DIR/macos-pasteimage" # panodan imaj yapıştırma (macOS cast) yaması
+PASTERICH_SRC="$SCRIPT_DIR/macos-pasterich" # harici stilli yapıştırma (Word/tarayıcı/PDF→UDE) yaması
 RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle" # otomatik düzeltme seçenekleri anında etkin
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
@@ -53,6 +54,7 @@ IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçları
 SKIN="${SKIN:-1}"       # 1=açık (varsayılan; modern düz Substance skin + Flamingo şerit + font + teal arka plan nötr gri) | 0=kapalı
 LIVETOGGLE="${LIVETOGGLE:-1}" # 1=açık (varsayılan; Otomatik Büyük Harf vb. toggle'lar restart'sız etkin) | 0=kapalı
 TEXTREPLACE="${TEXTREPLACE:-1}" # 1=açık (varsayılan; macOS Metin Değiştirme kısayolları UDE'de) | 0=kapalı
+PASTERICH="${PASTERICH:-1}" # 1=açık (varsayılan; harici stilli yapıştırma — Word/tarayıcı/PDF→UDE) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -469,6 +471,39 @@ apply_pasteimage() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[pasteimage] panodan imaj yapıştırma yaması uygulandı."
 }
 
+apply_pasterich() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$PASTERICH" = "1" ] || return 0
+	# İdempotans: helper zaten enjekte edilmişse atla (grep -q DEĞİL — SIGPIPE/pipefail tuzağı).
+	if unzip -l "$JAR" 2>/dev/null | grep 'macospasterich/RichPaste.class' >/dev/null 2>&1; then
+		c_ok "[pasterich] zaten yamalı, atlandı."; return 0
+	fi
+	c_info "[pasterich] harici stilli yapıştırma yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[pasterich] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[pasterich] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
+	# 1) Saf-Java HTML→content.xml dönüştürücü sınıflarını derle + jar'a enjekte et
+	#    (patcher'dan ÖNCE; insertBefore derlemesi RichPaste.docOf/fromClipboardHtml'i
+	#    jar classpath'inden çözer). Tüm macospasterich/*.java derlenir — harici bağımlılık yok.
+	rm -rf "$BUILD/_prhelper"; mkdir -p "$BUILD/_prhelper"
+	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_prhelper" \
+		"$PASTERICH_SRC"/macospasterich/*.java \
+		|| { c_warn "[pasterich] dönüştürücü derlenemedi; yama atlandı."; return 0; }
+	( cd "$BUILD/_prhelper" && zip -q -r "$JAR" macospasterich )
+	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
+	rm -rf "$BUILD/_prpatch"; mkdir -p "$BUILD/_prpatch/out"
+	"$jc" --release 11 -encoding UTF-8 -cp "$jvs" -d "$BUILD/_prpatch" "$PASTERICH_SRC/PasteRichPatch.java" \
+		|| { c_warn "[pasterich] PasteRichPatch derlenemedi; yama atlandı."; return 0; }
+	if ! "$jr" -cp "$BUILD/_prpatch:$jvs" PasteRichPatch "$JAR" "$BUILD/_prpatch/out"; then
+		zip -q -d "$JAR" 'macospasterich/*' >/dev/null 2>&1 || true
+		c_warn "[pasterich] kanca uygulanamadı (UDE sürümü değişmiş olabilir); yama geri alındı."
+		return 0
+	fi
+	( cd "$BUILD/_prpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[pasterich] harici stilli yapıştırma yaması uygulandı."
+}
+
 apply_imgresize() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$IMGRESIZE" = "1" ] || return 0
@@ -603,6 +638,7 @@ patch_jar() {
 	apply_filedialog "$JAR"
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
+	apply_pasterich "$JAR"
 	apply_imgresize "$JAR"
 	apply_livetoggle "$JAR"
 	apply_skin "$JAR"
@@ -788,6 +824,7 @@ case "${1:-all}" in
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	paste-rich) apply_pasterich "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-resize) apply_imgresize "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	live-toggle) apply_livetoggle "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	skin) SKIN=1 apply_skin "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
