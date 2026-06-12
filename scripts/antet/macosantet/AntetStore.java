@@ -1,7 +1,20 @@
 package macosantet;
 
-/* Antet deposu + contain-fit. Swing'e bağımlılığı YOK (jar'sız test edilir).
- * Klasör/IO metotları Task 2'de eklenir. */
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import javax.imageio.ImageIO;
+
+/* Antet deposu + contain-fit. Swing'e bağımlılığı YOK (jar'sız test edilir). */
 public final class AntetStore {
 
     /* A4, punto (pt): 21.0x29.7 cm * 28.3464566 */
@@ -19,5 +32,72 @@ public final class AntetStore {
         w = Math.max(1, Math.min(w, (int) Math.ceil(pw)));
         h = Math.max(1, Math.min(h, (int) Math.ceil(ph)));
         return new int[] { w, h };
+    }
+
+    /* Test için system property ile yönlendirilebilir. */
+    public static File dir() {
+        String o = System.getProperty("macosantet.dir");
+        if (o != null && !o.isEmpty()) return new File(o);
+        return new File(System.getProperty("user.home"),
+            "Library/Application Support/UDE/Antetler");
+    }
+
+    public static boolean accepts(String name) {
+        String n = name.toLowerCase(Locale.ROOT);
+        return n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg");
+    }
+
+    /* Ada göre sıralı; klasör yoksa boş dizi (bölüm yine çizilir). */
+    public static File[] list() {
+        File[] all = dir().listFiles();
+        if (all == null) return new File[0];
+        List<File> out = new ArrayList<File>();
+        for (File f : all) if (f.isFile() && accepts(f.getName())) out.add(f);
+        File[] arr = out.toArray(new File[0]);
+        Arrays.sort(arr, new Comparator<File>() {
+            public int compare(File a, File b) {
+                return a.getName().compareToIgnoreCase(b.getName());
+            }
+        });
+        return arr;
+    }
+
+    /* Klasöre kopyalar (ilk eklemede klasörü oluşturur); aynı ad üzerine yazar. */
+    public static File add(File src) throws IOException {
+        File d = dir();
+        if (!d.isDirectory() && !d.mkdirs())
+            throw new IOException("klasör oluşturulamadı: " + d);
+        File dest = new File(d, src.getName());
+        Files.copy(src.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        return dest;
+    }
+
+    public static boolean delete(File f) { return f.delete(); }
+
+    public static String displayName(File f) {
+        String n = f.getName();
+        int dot = n.lastIndexOf('.');
+        return dot > 0 ? n.substring(0, dot) : n;
+    }
+
+    /* Diskten oku + sayfaya contain-fit (bicubic). Tamam yolu PNG base64
+     * yazdığından ARGB güvenli. */
+    public static BufferedImage loadFitted(File f, double pw, double ph) throws IOException {
+        BufferedImage img = ImageIO.read(f);
+        if (img == null) throw new IOException("resim okunamadı: " + f.getName());
+        int[] d = computeFit(img.getWidth(), img.getHeight(), pw, ph);
+        if (d[0] == img.getWidth() && d[1] == img.getHeight()) return img;
+        BufferedImage out = new BufferedImage(d[0], d[1], BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING,
+                RenderingHints.VALUE_RENDER_QUALITY);
+            g.drawImage(img, 0, 0, d[0], d[1], null);
+        } finally {
+            g.dispose();
+        }
+        return out;
     }
 }
