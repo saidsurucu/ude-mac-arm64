@@ -47,7 +47,7 @@ FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (ta
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
 FILEDIALOG="${FILEDIALOG:-1}" # 1=açık (varsayılan; native macOS dosya pencereleri) | 0=kapalı
-IMGFULL="${IMGFULL:-}"   # boş=kapalı | 1=satır-içi imaj tam-çözünürlük (bulanıklık) yaması
+IMGFULL="${IMGFULL:-1}"  # 1=açık (varsayılan; satır-içi imaj tam-çözünürlük, bulanıklık yaması) | 0=kapalı
 PASTEIMG="${PASTEIMG:-1}" # 1=açık (varsayılan; panodan imaj yapıştırma macOS düzeltmesi) | 0=kapalı
 IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçlarıyla boyutlandırma) | 0=kapalı
 SKIN="${SKIN:-1}"       # 1=açık (varsayılan; modern düz Substance skin + Flamingo şerit + font + teal arka plan nötr gri) | 0=kapalı
