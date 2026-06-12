@@ -1,17 +1,23 @@
 # Harici stilli yapıştırma (PASTERICH) — Tasarım
 
 **Tarih:** 2026-06-12
-**Durum:** Uygulandı + uçtan uca doğrulandı (canlı GUI paste testi kullanıcıda)
+**Durum:** Uygulandı + canlı GUI'de doğrulandı (tablo+liste+biçim çalışıyor)
 **Branch:** `feature/paste-rich-text`
 
-> **PİVOT (2026-06-12):** İlk tasarım dönüşümü paketli udf-cli ikilisiyle (alt
-> süreç) yapıyordu. Kullanıcı talebiyle dönüştürücü **tamamen saf Java'da**
-> yeniden yazıldı (harici ikili/alt süreç YOK). udf-cli yalnızca şema/algoritma
-> **referansı** olarak kullanıldı; saf-Java çıktısı udf-cli ile byte-identical
-> doğrulandı. Güncel mimari: pano HTML → `macospasterich` saf-Java dönüştürücü
-> (Html tokenizer → HtmlToUde model → UdeXml content.xml → java.util.zip .udf)
-> → `WPDocumentPanel.a(InputStream)` → select-all/copy/paste. Besleme spike'ı
-> gerçek editor-app.jar'a karşı headless geçti (DocumentEx.getLength>0).
+> **PİVOT 2 (2026-06-12) — YEREL EKLEME:** copy→paste yolu (aşağıdaki PİVOT 1)
+> metin/liste için çalıştı ama **tabloları DÜZLEŞTİRDİ** — UDE'nin EditorDataFlavor
+> copy→paste'i tablo yapısını kaybediyor (gerçek UDE tabloları dahil; element-ağacı
+> testi: load→copy→paste → table=0). Ayrıca copy başarısızsa sonsuz özyineleme/donma
+> + tablo-ekleme NPE'si. **copy→paste terk edildi.** Güncel mimari: model canlı
+> belgeye YEREL eklenir (`NativeInsert`): tablo `DocumentEx.a(...)` ile gerçek tablo
+> + hücre doldurma, paragraf `insertString`+`StyleConstants`. Hook:
+> `RichPaste.insertInto(this, html)`. Detay CLAUDE.md "Harici Stilli Yapıştırma".
+>
+> **PİVOT 1 (2026-06-12):** İlk tasarım paketli udf-cli ikilisiyle (alt süreç)
+> yapıyordu. Kullanıcı talebiyle dönüştürücü tamamen saf Java'da yeniden yazıldı;
+> udf-cli yalnız şema/algoritma referansı (çıktı byte-identical doğrulandı).
+> Saf-Java dönüştürücü (Css/UdeDoc/Html/HtmlToUde) korundu; yalnız EKLEME yolu
+> .udf→copy→paste yerine NativeInsert oldu (UdeXml/.udf artık test/yedek).
 
 ## Problem
 
