@@ -39,7 +39,19 @@ final class NativeInsert {
             javax.swing.text.JTextComponent tc = (javax.swing.text.JTextComponent) editor;
             StyledDocument doc = (StyledDocument) tc.getDocument();
             int start = tc.getCaretPosition();
-            int delta = insertBlocks(editor, doc, trimEmpties(model.body), start);
+            List<Block> body = trimEmpties(model.body);
+            // Tablo belgenin İLK öğesi olarak eklenirse (offset 0'da, üstünde
+            // paragraf yokken) UDE'nin tablo-silme primitifi (DocumentEx.f /
+            // "Tablo Sil") onu KALDIRAMAZ: satır içeriğini taşıyacak bir üst
+            // paragraf bulamaz, "Nowhere to place the list" fırlatır. Boş belge
+            // bağlamında offset 0 normal paragraftır → insertString(0,"\n") temiz
+            // bir baş paragraf yaratır (tablo bağlamı değil; hücre bölünmez),
+            // tabloyu offset 1'e iter → Backspace ile silinebilir olur.
+            if (start == 0 && !body.isEmpty() && body.get(0) instanceof Table) {
+                doc.insertString(0, "\n", null);
+                start = 1;
+            }
+            int delta = insertBlocks(editor, doc, body, start);
             // İmleci eklenen içeriğin SONUNA al: resim ekleme (insertImage) caret'i
             // ekleme noktasına taşır, sonraki içerik (tablo/paragraf) doc.insertString
             // ile eklenince caret onları takip etmez → imleç belge ortasında kalırdı.
