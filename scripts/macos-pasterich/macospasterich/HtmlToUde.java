@@ -168,6 +168,30 @@ final class HtmlToUde implements Html.Handler {
         return null;
     }
 
+    /**
+     * Vurgu/arka-plan rengini çıkarır. Word highlight'ı `mso-highlight:yellow` ve
+     * `background:yellow` (kısayol) ile gelir — `background-color` DEĞİL. Tek-token
+     * renk değilse / none/transparent/white ise null (vurgu yok).
+     */
+    private static Integer highlight(Map<String, String> ps) {
+        String v = ps.get("msoHighlight");
+        if (v == null || isNoHl(v)) v = ps.get("background");
+        if (v == null || isNoHl(v)) v = ps.get("backgroundColor");
+        if (v == null || isNoHl(v)) return null;
+        v = v.trim();
+        if (v.indexOf(' ') >= 0) return null;   // çok-değerli background kısayolu (resim vb.) atla
+        int argb = Css.cssToArgb(v);
+        if (argb == -1 || argb == -16777216) return null;   // beyaz/siyah = vurgu yok say
+        return argb;
+    }
+
+    private static boolean isNoHl(String v) {
+        if (v == null) return true;
+        String s = v.trim().toLowerCase();
+        return s.isEmpty() || s.equals("none") || s.equals("transparent")
+                || s.equals("white") || s.equals("#fff") || s.equals("#ffffff") || s.equals("windowtext");
+    }
+
     /** Stil haritasında görünür (none olmayan) bir kenarlık var mı? */
     private static boolean styleHasVisibleBorder(Map<String, String> ps) {
         String[] keys = {"border", "borderTop", "borderBottom", "borderLeft", "borderRight", "borderStyle"};
@@ -199,7 +223,8 @@ final class HtmlToUde implements Html.Handler {
                 if (ps.containsKey("fontFamily")) f.fontFamily = ps.get("fontFamily");
                 if (ps.containsKey("fontSize")) f.fontSize = Css.parseFontSize(ps.get("fontSize"));
                 if (ps.containsKey("color")) f.color = Css.cssToArgb(ps.get("color"));
-                if (ps.containsKey("backgroundColor")) f.backgroundColor = Css.cssToArgb(ps.get("backgroundColor"));
+                Integer hl = highlight(ps);
+                if (hl != null) f.backgroundColor = hl;
             }
             pushStyle(f);
             return;
