@@ -97,6 +97,23 @@ public final class RichPaste {
         PrLog.log("inject", t);
     }
 
+    /**
+     * WPDocumentPanel.a():fi metodunu reflection ile çağırır. WPDocumentPanel'de
+     * 'a()' adıyla İKİ no-arg metot vardır (obfuscate dönüş-tipi overload'ı):
+     * biri int, biri fi döndürür. Javassist/javac kaynak düzeyinde dönüş tipiyle
+     * ayırt edemez ("bad method") → bu yardımcı fi-döndüren olanı seçer. Dönen
+     * Object, kancada tr...text.hj'ye cast edilir (fi extends hj).
+     */
+    public static Object docOf(Object panel) throws Exception {
+        for (java.lang.reflect.Method m : panel.getClass().getMethods()) {
+            if (m.getName().equals("a") && m.getParameterCount() == 0
+                    && m.getReturnType().getName().endsWith(".text.fi")) {
+                return m.invoke(panel);
+            }
+        }
+        throw new NoSuchMethodException("WPDocumentPanel.a():fi bulunamadı");
+    }
+
     private RichPaste() {
     }
 }
