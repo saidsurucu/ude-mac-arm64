@@ -180,6 +180,14 @@ public final class MacTextKeys {
             JTextComponent t = getTextComponent(e);
             if (t == null || !t.isEditable() || !t.isEnabled()) return;
             try {
+                // Aktif seçim varsa (ör. Cmd+A ile tümünü seç, Cmd hâlâ basılıyken
+                // Backspace) macOS davranışı seçimin tamamını siler. replaceSelection
+                // UDE editöründe de doğru yoldur (hj.replaceSelection → yapı/geri-al
+                // korunur); düz alanlarda standart davranıştır.
+                if (t.getSelectionStart() != t.getSelectionEnd()) {
+                    t.replaceSelection("");
+                    return;
+                }
                 int caret = t.getCaretPosition();
                 int rowStart = Utilities.getRowStart(t, caret);
                 if (rowStart < 0) rowStart = 0;
