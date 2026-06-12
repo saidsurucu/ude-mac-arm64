@@ -39,7 +39,7 @@ final class HtmlToUde implements Html.Handler {
     private abstract static class Ctx { }
     private static final class RootCtx extends Ctx { final List<Block> blocks = new ArrayList<>(); }
     private static final class ParaCtx extends Ctx { final Paragraph p; ParaCtx(Paragraph p){ this.p = p; } }
-    private static final class TableCtx extends Ctx { final List<TableRow> rows = new ArrayList<>(); }
+    private static final class TableCtx extends Ctx { final List<TableRow> rows = new ArrayList<>(); boolean hasBorder; }
     private static final class RowCtx extends Ctx { final List<TableCell> cells = new ArrayList<>(); }
     private static final class CellCtx extends Ctx {
         final List<Block> blocks = new ArrayList<>();
@@ -161,6 +161,27 @@ final class HtmlToUde implements Html.Handler {
         return false;
     }
 
+    private TableCtx currentTable() {
+        for (int i = ctxStack.size() - 1; i >= 0; i--) {
+            if (ctxStack.get(i) instanceof TableCtx) return (TableCtx) ctxStack.get(i);
+        }
+        return null;
+    }
+
+    /** Stil haritasında görünür (none olmayan) bir kenarlık var mı? */
+    private static boolean styleHasVisibleBorder(Map<String, String> ps) {
+        String[] keys = {"border", "borderTop", "borderBottom", "borderLeft", "borderRight", "borderStyle"};
+        for (String k : keys) {
+            String v = ps.get(k);
+            if (v == null) continue;
+            String lv = v.toLowerCase();
+            if (lv.contains("solid") || lv.contains("dashed") || lv.contains("dotted") || lv.contains("double")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // ---- SAX handler ----
     @Override
     public void onStart(String name, Map<String, String> attribs, boolean selfClosing) {
@@ -266,7 +287,15 @@ final class HtmlToUde implements Html.Handler {
             return;
         }
 
-        if (tag.equals("table")) { push(new TableCtx()); return; }
+        if (tag.equals("table")) {
+            TableCtx tc = new TableCtx();
+            String ba = attribs.get("border");           // HTML <table border="1">
+            if (ba != null && !ba.trim().isEmpty() && !ba.trim().equals("0")) tc.hasBorder = true;
+            String style = attribs.get("style");
+            if (style != null && styleHasVisibleBorder(Css.parseInlineStyle(style))) tc.hasBorder = true;
+            push(tc);
+            return;
+        }
         if (tag.equals("tr")) { push(new RowCtx()); return; }
 
         if (tag.equals("td") || tag.equals("th")) {
@@ -277,6 +306,10 @@ final class HtmlToUde implements Html.Handler {
             String style = attribs.get("style");
             if (style != null) {
                 Map<String, String> ps = Css.parseInlineStyle(style);
+                if (styleHasVisibleBorder(ps)) {
+                    TableCtx t = currentTable();
+                    if (t != null) t.hasBorder = true;     // hücre kenarlığı → tablo görünür
+                }
                 if (ps.containsKey("backgroundColor")) cc.fillColor = Css.cssToArgb(ps.get("backgroundColor"));
                 if (ps.containsKey("verticalAlign")) cc.verticalAlign = parseVerticalAlign(ps.get("verticalAlign"));
                 if (ps.containsKey("border")) {
@@ -409,6 +442,8 @@ final class HtmlToUde implements Html.Handler {
                 Table table = new Table();
                 table.rows = tc.rows;
                 table.columns = maxCols;
+                table.border = new BorderStyle(tc.hasBorder ? "borderCell" : "borderNone",
+                        "borderStyle-solid");
                 List<Integer> widths = new ArrayList<>();
                 for (int k = 0; k < maxCols; k++) widths.add(1);
                 table.columnWidths = widths;

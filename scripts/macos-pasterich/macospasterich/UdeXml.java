@@ -235,13 +235,9 @@ final class UdeXml {
         if (cell.colspan > 1) xml.append(" colspan=\"").append(cell.colspan).append("\"");
         if (!cell.verticalAlign.equals("top")) xml.append(" align=\"").append(cellAlign(cell.verticalAlign)).append("\"");
         if (cell.fillColor != 16777215 && cell.fillColor != -1) xml.append(" fillColor=\"").append(cell.fillColor).append("\"");
-        if (cell.borderSpec != 0) {
-            xml.append(" border=\"").append(esc(cell.border.name)).append("\"");
-            xml.append(" borderWidth=\"").append(f1(cell.borderWidth)).append("\"");
-            xml.append(" borderSpec=\"").append(cell.borderSpec).append("\"");
-            xml.append(" borderColor=\"").append(cell.borderColor).append("\"");
-            xml.append(" borderStyle=\"").append(esc(cell.border.style)).append("\"");
-        }
+        // Hücreye kenarlık özniteliği YOK: UDE kenarlığı YALNIZ tablo-düzeyi
+        // border="borderCell"/"borderNone" ile çizer (gerçek UDE dosyalarında hücreler
+        // daima çıplak — per-cell borderColor="0" tablo çizimini ezip görünmez yapıyordu).
         xml.append(">");
         xml.append(serializeBlocks(cell.content, blockIdCounter, offsetCursor));
         xml.append("</cell>");
