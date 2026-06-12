@@ -21,16 +21,21 @@ public final class AntetStore {
     public static final double A4_W = 595.0;
     public static final double A4_H = 842.0;
 
+    /* Hedef piksel yoğunluğu: UDE bgImage'i sayfa imageable alanına orana sadık
+     * BÜYÜTEREK çizer (wp.b.at, getImageableWidth/Height). Sayfa-pt boyutuna
+     * (72 dpi) küçültmek baskıda bulanıklaştırır; 300 dpi eşdeğeri hedef alınır. */
+    public static final double DPI_SCALE = 300.0 / 72.0;
+
     private AntetStore() {}
 
-    /* Orana sadık, sayfanın İÇİNE sığdır (contain). Küçük resim büyütülür;
-     * sonuç hiçbir eksende sayfayı aşmaz, en az 1 px. */
-    public static int[] computeFit(int iw, int ih, double pw, double ph) {
-        double s = Math.min(pw / iw, ph / ih);
-        int w = (int) Math.round(iw * s);
-        int h = (int) Math.round(ih * s);
-        w = Math.max(1, Math.min(w, (int) Math.ceil(pw)));
-        h = Math.max(1, Math.min(h, (int) Math.ceil(ph)));
+    /* Orana sadık, sayfanın 300 dpi eşdeğeri kutusunun İÇİNE sığdır (contain).
+     * ASLA büyütme (s ≤ 1): düşük çözünürlüklü kaynak doğal kalır, yalnız
+     * devasa kaynak 300 dpi'a iner. Sonuç en az 1 px. pwPt/phPt punto cinsinden. */
+    public static int[] computeFit(int iw, int ih, double pwPt, double phPt) {
+        double tw = pwPt * DPI_SCALE, th = phPt * DPI_SCALE;
+        double s = Math.min(Math.min(tw / iw, th / ih), 1.0);
+        int w = Math.max(1, (int) Math.round(iw * s));
+        int h = Math.max(1, (int) Math.round(ih * s));
         return new int[] { w, h };
     }
 

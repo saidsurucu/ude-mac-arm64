@@ -24,22 +24,27 @@ public final class AntetFitTest {
 
     public static void main(String[] args) {
         double pw = AntetStore.A4_W, ph = AntetStore.A4_H;
+        double tw = pw * AntetStore.DPI_SCALE, th = ph * AntetStore.DPI_SCALE;
 
-        check("A4 oranli buyuk tarama (150dpi A4)",
-            AntetStore.computeFit(1240, 1754, pw, ph), 595, 842);
-        check("genis bant antet",
-            AntetStore.computeFit(2000, 500, pw, ph), 595, 149);
-        check("uzun dar serit",
-            AntetStore.computeFit(500, 2000, pw, ph), 211, 842);
-        check("kucuk resim buyutulur",
-            AntetStore.computeFit(100, 100, pw, ph), 595, 595);
-        check("tam sayfa boyutu degismez",
+        check("A4 oranli orta kaynak 300dpi alti -> buyutulmez",
+            AntetStore.computeFit(1240, 1754, pw, ph), 1240, 1754);
+        check("devasa A4 kaynak 300dpi'a iner",
+            AntetStore.computeFit(5000, 7071, pw, ph), 2479, 3506);
+        check("genis bant 300dpi alti -> buyutulmez",
+            AntetStore.computeFit(2000, 500, pw, ph), 2000, 500);
+        check("devasa genis bant genislige gore iner",
+            AntetStore.computeFit(8000, 1000, pw, ph), 2479, 310);
+        check("kucuk resim ASLA buyutulmez",
+            AntetStore.computeFit(100, 100, pw, ph), 100, 100);
+        check("sayfa-pt boyutu buyutulmez",
             AntetStore.computeFit(595, 842, pw, ph), 595, 842);
 
-        for (int iw = 1; iw < 4000; iw += 173) {
-            for (int ih = 1; ih < 4000; ih += 211) {
+        for (int iw = 1; iw < 9000; iw += 277) {
+            for (int ih = 1; ih < 9000; ih += 311) {
                 int[] d = AntetStore.computeFit(iw, ih, pw, ph);
-                if (d[0] < 1 || d[1] < 1 || d[0] > Math.ceil(pw) || d[1] > Math.ceil(ph)) {
+                if (d[0] < 1 || d[1] < 1
+                        || d[0] > Math.ceil(tw) || d[1] > Math.ceil(th)
+                        || d[0] > iw || d[1] > ih) {
                     fails++;
                     System.out.println("FAIL sinir: " + iw + "x" + ih
                         + " -> " + d[0] + "x" + d[1]);
