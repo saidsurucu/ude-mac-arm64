@@ -19,7 +19,27 @@ import macospasterich.UdeDoc.Document;
  */
 public final class RichPaste {
 
-    /** Pano HTML'ini .udf (UDF zip) baytına çevirir; başarısızlıkta null. */
+    /**
+     * Pano HTML'ini canlı editörün belgesine caret'e YEREL ekler (copy→paste
+     * YOK — o yol tabloları düzleştiriyordu). HtmlToUde modeli kurar, NativeInsert
+     * tabloları DocumentEx.a ile gerçek tablo olarak, paragrafları StyleConstants
+     * ile ekler. Başarıda true; başarısızsa false → çağıran düz-metne düşer.
+     */
+    public static boolean insertInto(Object editor, String html) {
+        try {
+            if (html == null || html.isEmpty()) return false;
+            UdeDoc.Document model = HtmlToUde.convert(html);
+            if (model.body.isEmpty()) { PrLog.log("boş model"); return false; }
+            boolean ok = NativeInsert.insert(editor, model);
+            PrLog.log(ok ? ("insertInto ok " + model.body.size() + " blok") : "insertInto başarısız");
+            return ok;
+        } catch (Throwable t) {
+            PrLog.log("insertInto", t);
+            return false;
+        }
+    }
+
+    /** Pano HTML'ini .udf (UDF zip) baytına çevirir; başarısızlıkta null. (Testler için.) */
     public static byte[] fromClipboardHtml(String html) {
         if (html == null || html.isEmpty()) return null;
         try {

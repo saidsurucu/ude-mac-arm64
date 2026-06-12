@@ -444,8 +444,10 @@ final class HtmlToUde implements Html.Handler {
                 table.columns = maxCols;
                 table.border = new BorderStyle(tc.hasBorder ? "borderCell" : "borderNone",
                         "borderStyle-solid");
+                // columnSpans MUTLAK sütun genişliğidir (gerçek UDE: 100/sütun); "1"
+                // dejenere tabloya yol açıp kenarlıkları görünmez kılar. Eşit dağıt.
                 List<Integer> widths = new ArrayList<>();
-                for (int k = 0; k < maxCols; k++) widths.add(1);
+                for (int k = 0; k < maxCols; k++) widths.add(100);
                 table.columnWidths = widths;
                 addBlock(table);
             }

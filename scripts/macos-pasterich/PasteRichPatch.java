@@ -44,9 +44,14 @@ public class PasteRichPatch {
         pool.insertClassPath(jar);
 
         CtClass hj = pool.get("tr.com.havelsan.uyap.system.editor.common.text.hj");
+
         CtMethod a = hj.getDeclaredMethod("a",
                 new CtClass[]{ pool.get("java.awt.datatransfer.Transferable") });
 
+        // İşaret yok + allHtmlFlavor varsa: pano HTML'i RichPaste.insertInto ile
+        // canlı editöre YEREL eklenir (DocumentEx.a ile gerçek tablo + StyleConstants
+        // paragraf/karakter). copy→paste YOK (tabloları düzleştiriyordu); clipboard/
+        // özyineleme/NPE riski yok. Başarıda return true (düz-metin fallback çalışmaz).
         String src =
               "{"
             + "  try {"
@@ -56,20 +61,7 @@ public class PasteRichPatch {
             + "      if (__o instanceof java.lang.String) {"
             + "        java.lang.String __h = (java.lang.String) __o;"
             + "        if (__h.indexOf(\"uyap-web-editor-data\") < 0) {"
-            + "          byte[] __u = macospasterich.RichPaste.fromClipboardHtml(__h);"
-            + "          if (__u != null) {"
-            + "            tr.com.havelsan.uyap.system.editor.common.gui.WPDocumentPanel __p ="
-            + "                new tr.com.havelsan.uyap.system.editor.common.gui.WPDocumentPanel();"
-            + "            tr.com.havelsan.uyap.system.editor.common.text.hj __fi ="
-            + "                (tr.com.havelsan.uyap.system.editor.common.text.hj) macospasterich.RichPaste.docOf(__p);"
-            + "            __fi.setCaret(new javax.swing.text.DefaultCaret());"
-            + "            __p.a(new java.io.ByteArrayInputStream(__u));"
-            + "            __fi = (tr.com.havelsan.uyap.system.editor.common.text.hj) macospasterich.RichPaste.docOf(__p);"
-            + "            __fi.a(\"select-all\", (java.lang.Object) null);"
-            + "            __fi.copy();"
-            + "            this.paste();"
-            + "            return true;"
-            + "          }"
+            + "          if (macospasterich.RichPaste.insertInto(this, __h)) return true;"
             + "        }"
             + "      }"
             + "    }"
