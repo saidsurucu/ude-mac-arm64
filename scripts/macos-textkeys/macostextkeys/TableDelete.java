@@ -11,6 +11,7 @@ import javax.swing.KeyStroke;
 import javax.swing.text.Document;
 import javax.swing.text.Element;
 import javax.swing.text.JTextComponent;
+import javax.swing.text.Position;
 import javax.swing.text.StyledDocument;
 import javax.swing.text.TextAction;
 
@@ -157,9 +158,21 @@ public final class TableDelete {
         };
         int caret = tc.getCaretPosition();
         int s = tc.getSelectionStart(), en = tc.getSelectionEnd();
-        int target = forward ? targetForDelete(dv, caret, s, en)
-                             : targetForBackspace(dv, caret, s, en);
+
+        // Seçim: kapsadığı TÜM tabloları f() ile kaldır, sonra kalan seçili
+        // metni sil (yoksa devret → normal seçim silme). Tek f() çağrısı yalnız
+        // tabloyu kaldırırdı, seçili metnin kalanını bırakırdı.
+        if (s != en) {
+            if (firstTableInRange(dv, s, en) == null) return false;  // tablo yok → normal sil
+            return deleteSelectionWithTables(tc, d, dv, s, en);
+        }
+
+        // Seçimsiz (imleç): tek tablo (ard / içeride-boş).
+        int target = targetForBackspace(dv, caret, s, en);   // forward fark etmez (adjacency yok)
+        if (forward) target = targetForDelete(dv, caret, s, en);
         if (target < 0) return false;
+        log("tryDelete forward=" + forward + " caret=" + caret + " target=" + target
+                + " docClass=" + d.getClass().getName());
         try {
             Method f = d.getClass().getMethod("f", int.class);  // wp.model.v.f(int) (miras)
             f.invoke(d, target);
@@ -168,9 +181,47 @@ public final class TableDelete {
             tc.requestFocus();
             return true;
         } catch (Throwable t) {
-            log("f(int) cagrilamadi: " + t);
+            log(unwrap("f(int) HATA", t));
             return false;   // reflection başarısız → normal Backspace'e devret
         }
+    }
+
+    /**
+     * Seçim aralığındaki tüm tabloları f() ile kaldırır, ardından kalan seçili
+     * metni siler. Offset kayması Position nesneleriyle otomatik izlenir
+     * (f() yapısal değişiklik yapar). En az bir tablo işlenmişse true.
+     */
+    private static boolean deleteSelectionWithTables(JTextComponent tc, Document d, DocView dv, int selS, int selE) {
+        log("deleteSelectionWithTables sel=[" + selS + "," + selE + "] docClass=" + d.getClass().getName());
+        try {
+            Method f = d.getClass().getMethod("f", int.class);
+            Position startPos = d.createPosition(selS);
+            Position endPos = d.createPosition(selE);
+            int guard = 0;
+            Element t;
+            while (guard++ < 500
+                    && (t = firstTableInRange(dv, startPos.getOffset(), endPos.getOffset())) != null) {
+                f.invoke(d, t.getStartOffset());
+            }
+            int s = startPos.getOffset(), e = endPos.getOffset();
+            if (e > s) d.remove(s, e - s);   // kalan seçili metni sil
+            tc.setCaretPosition(Math.min(startPos.getOffset(), d.getLength()));
+            tc.requestFocus();
+            return true;
+        } catch (Throwable t) {
+            log(unwrap("deleteSelectionWithTables HATA", t));
+            return false;   // başarısız → normal seçim silmeye devret
+        }
+    }
+
+    /** InvocationTargetException'ı açıp ilk 12 stack çerçevesiyle birlikte metne çevirir. */
+    private static String unwrap(String prefix, Throwable t) {
+        Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)
+                ? t.getCause() : t;
+        StringBuilder sb = new StringBuilder(prefix).append(": ").append(cause);
+        StackTraceElement[] st = cause.getStackTrace();
+        for (int i = 0; i < st.length && i < 12; i++) sb.append("\n    at ").append(st[i]);
+        return sb.toString();
     }
 
     /**
