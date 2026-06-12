@@ -38,8 +38,12 @@ final class NativeInsert {
         try {
             javax.swing.text.JTextComponent tc = (javax.swing.text.JTextComponent) editor;
             StyledDocument doc = (StyledDocument) tc.getDocument();
-            int pos = tc.getCaretPosition();
-            insertBlocks(editor, doc, trimEmpties(model.body), pos);
+            int start = tc.getCaretPosition();
+            int delta = insertBlocks(editor, doc, trimEmpties(model.body), start);
+            // İmleci eklenen içeriğin SONUNA al: resim ekleme (insertImage) caret'i
+            // ekleme noktasına taşır, sonraki içerik (tablo/paragraf) doc.insertString
+            // ile eklenince caret onları takip etmez → imleç belge ortasında kalırdı.
+            try { tc.setCaretPosition(Math.min(start + delta, doc.getLength())); } catch (Throwable ignore) { }
             return true;
         } catch (Throwable t) {
             PrLog.log("NativeInsert.insert", t);
