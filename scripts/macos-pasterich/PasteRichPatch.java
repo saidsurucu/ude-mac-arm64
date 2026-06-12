@@ -14,6 +14,12 @@ import java.io.FileOutputStream;
  * paste() düz-metin dalına düşer → harici (Word/tarayıcı/PDF) içeriğinde biçim
  * kaybı.
  *
+ * Pages/TextEdit/Mail panoya HTML KOYMAZ (yalnız RTF/RTFD). Bu kaynaklar için
+ * dal, RTF flavor'ını yakalayıp macOS `textutil` ile HTML'e çevirir (üretilen HTML
+ * zaten &lt;style&gt; class kuralları biçiminde — HtmlToUde çözer), sonra aynı YEREL
+ * ekleme yolunu kullanır. paste() EditorDataFlavor yoksa a(Transferable)'ı koşulsuz
+ * çağırdığından (bytecode'dan doğrulandı) RTF-only pano da bu kancaya ulaşır.
+ *
  * Bu yama, metodun BAŞINA bir dal ekler: işaret YOK ama allHtmlFlavor VARSA,
  * pano HTML'i macospasterich.RichPaste ile (paketli udf-cli ikilisi alt süreci)
  * UDE'nin kendi .udf (UDF zip) formatına çevrilir; başarıda UYAP-web yolunun
@@ -64,6 +70,8 @@ public class PasteRichPatch {
             + "          if (macospasterich.RichPaste.insertInto(this, __h)) return true;"
             + "        }"
             + "      }"
+            + "    } else if (__t != null) {"
+            + "      if (macospasterich.RichPaste.insertRtf(this, __t)) return true;"
             + "    }"
             + "  } catch (java.lang.Throwable __e) { macospasterich.RichPaste.logExternal(__e); }"
             + "}";

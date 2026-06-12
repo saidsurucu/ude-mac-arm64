@@ -19,6 +19,8 @@ final class Html {
         void onStart(String name, Map<String, String> attrs, boolean selfClosing);
         void onEnd(String name);
         void onText(String text);
+        /** &lt;style&gt; bloğunun ham CSS içeriği (Pages/Docs sınıf kuralları). */
+        void onStyle(String css);
     }
 
     static void parse(String html, Handler h) {
@@ -60,10 +62,21 @@ final class Html {
                 i = end + 1;
                 if (name.isEmpty()) continue;
                 String lower = name.toLowerCase();
-                if (lower.equals("script") || lower.equals("style")) {
+                if (lower.equals("script")) {
                     // içeriği yut → metne sızmasın
                     int close = indexOfCloseTag(html, lower, i);
                     i = (close < 0) ? n : close;
+                    continue;
+                }
+                if (lower.equals("style")) {
+                    // içeriği metne sızdırma ama CSS sınıf kuralları için handler'a ver
+                    int idx = html.toLowerCase().indexOf("</style", i);
+                    if (idx < 0) { h.onStyle(html.substring(i)); i = n; }
+                    else {
+                        h.onStyle(html.substring(i, idx));
+                        int gt = html.indexOf('>', idx);
+                        i = (gt < 0) ? n : gt + 1;
+                    }
                     continue;
                 }
                 h.onStart(name, attrs, selfClosing);

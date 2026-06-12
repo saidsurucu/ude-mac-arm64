@@ -107,11 +107,16 @@ final class NativeInsert {
             }
             // TabRun şimdilik atlanır
         }
-        // paragraf öznitelikleri (hizalama + girintiler + aralık)
-        if (pos > paraStart) doc.setParagraphAttributes(paraStart, pos - paraStart, paraAttrs(para), false);
-        // paragraf sonlandırıcı
+        // paragraf sonlandırıcı ÖNCE eklenir ki paragraf \n ile sınırlansın;
+        // aksi halde liste/hizalama öznitelikleri bir sonraki paragrafa sızar
+        // (bullet+number aynı paragrafa binip yanlış işaret çizilir).
         doc.insertString(pos, "\n", null);
         pos += 1;
+        // paragraf öznitelikleri — replace=TRUE: UDE her yeni paragrafı bir öncekinin
+        // özniteliklerini MİRAS alarak kurar; replace=false yalnız EKLER → bullet bir
+        // sonraki (numara/düz) paragrafa sızar (numara yerine bullet, "bitti." de
+        // madde işaretli çıkar). TRUE ile her paragrafın işareti tam kontrol edilir.
+        doc.setParagraphAttributes(paraStart, pos - paraStart, paraAttrs(para), true);
         return pos;
     }
 
@@ -119,12 +124,17 @@ final class NativeInsert {
         int before = doc.getLength();
         int rows = table.rows.size();
         int cols = table.columns;
-        int[] colW = new int[cols];
+        int[] colW = new int[cols];                  // 5. param: uzunluk = SÜTUN sayısı
         for (int i = 0; i < cols; i++) {
             colW[i] = (i < table.columnWidths.size()) ? table.columnWidths.get(i) : 100;
         }
-        String[] colStyles = new String[cols];
-        for (int i = 0; i < cols; i++) colStyles[i] = "hvl-default";
+        // 6. param PER-SATIR dizidir (uzunluk = SATIR sayısı), "rowN" adları.
+        // DocumentEx.a gövdesi bunu p3(rows) ile karşılaştırır ve eşleşmezse p4(cols)
+        // uzunlukta YENİDEN kurar (vendor bug) → rows>cols ise satır döngüsü
+        // index=rows-1'i length=cols dizide arar → AIOOBE. Uzunluğu rows vererek
+        // yeniden-kurmayı engelle (kare tablolar bu hatayı gizliyordu).
+        String[] rowStyles = new String[rows];
+        for (int i = 0; i < rows; i++) rowStyles[i] = "row" + (i + 1);
 
         // tablo öznitelikleri (ae.x=ad, ae.w=genişlikler, ae.z=kenarlık)
         SimpleAttributeSet attrs = new SimpleAttributeSet();
@@ -133,8 +143,8 @@ final class NativeInsert {
         if (widthsStr != null) aeSet("w", attrs, (String) widthsStr);
         aeSet("z", attrs, table.border.name);   // borderCell / borderNone
 
-        // YEREL tablo kur
-        tableBuild(doc, pos, "Sabit", rows, cols, colW, colStyles, attrs);
+        // YEREL tablo kur (imza: pos, ad, rows, cols, colWidths[cols], rowStyles[rows], attrs)
+        tableBuild(doc, pos, "Sabit", rows, cols, colW, rowStyles, attrs);
 
         // hücreleri bul (table→row→cell→ilk paragraf offset) ve içerikle doldur.
         // Tablo, pos'tan itibaren eklendi; tablo elementini bul.
@@ -262,7 +272,7 @@ final class NativeInsert {
         return t.replaceAll("[\\r\\n]+", " ");
     }
 
-    /** Paragraf öznitelikleri: hizalama + girintiler + aralık (StyleConstants). */
+    /** Paragraf öznitelikleri: hizalama + girintiler + aralık + liste işareti. */
     private static SimpleAttributeSet paraAttrs(Paragraph p) {
         SimpleAttributeSet pa = new SimpleAttributeSet();
         StyleConstants.setAlignment(pa, p.alignment);
@@ -271,6 +281,22 @@ final class NativeInsert {
         if (p.firstLineIndent != 0) StyleConstants.setFirstLineIndent(pa, (float) p.firstLineIndent);
         if (p.spaceBefore != 0) StyleConstants.setSpaceAbove(pa, (float) p.spaceBefore);
         if (p.spaceAfter != 0) StyleConstants.setSpaceBelow(pa, (float) p.spaceAfter);
+        // GERÇEK UDE liste işareti (bullet/numara). Anahtarlar String (wp.model.ad
+        // sabitleri), DEĞER TİPLERİ kritik: ListLevel=Integer, ListId=Long, aksi
+        // halde UDE view yeniden-kurulumunda ClassCastException (bytecode'dan ölçüldü).
+        if (p.list != null) {
+            int level = Math.max(0, p.list.level);
+            pa.addAttribute("ListLevel", Integer.valueOf(level));
+            if ("numbered".equals(p.list.type)) {
+                pa.addAttribute("Numbered", Boolean.TRUE);
+                pa.addAttribute("NumberType", p.list.numberType != null ? p.list.numberType : "NUMBER_TYPE_NUMBER_DOT");
+                long id = p.list.listId != null ? p.list.listId.longValue() : 1L;
+                pa.addAttribute("ListId", Long.valueOf(id));
+            } else {
+                pa.addAttribute("Bulleted", Boolean.TRUE);
+                pa.addAttribute("BulletType", p.list.bulletType != null ? p.list.bulletType : "BULLET_TYPE_ELLIPSE");
+            }
+        }
         return pa;
     }
 
@@ -293,7 +319,7 @@ final class NativeInsert {
     private static Method utilsWidthsM;
 
     private static void tableBuild(StyledDocument doc, int pos, String name, int rows, int cols,
-                                   int[] colW, String[] colStyles, SimpleAttributeSet attrs) throws Exception {
+                                   int[] colW, String[] rowStyles, SimpleAttributeSet attrs) throws Exception {
         if (tableBuildM == null) {
             for (Method m : doc.getClass().getMethods()) {
                 if (!m.getName().equals("a")) continue;
@@ -306,7 +332,7 @@ final class NativeInsert {
             }
             if (tableBuildM == null) throw new NoSuchMethodException("DocumentEx tablo-kurma metodu yok");
         }
-        tableBuildM.invoke(doc, pos, name, rows, cols, colW, colStyles, attrs);
+        tableBuildM.invoke(doc, pos, name, rows, cols, colW, rowStyles, attrs);
     }
 
     private static void aeSet(String which, MutableAttributeSet attrs, String val) {

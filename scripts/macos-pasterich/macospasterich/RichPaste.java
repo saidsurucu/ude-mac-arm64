@@ -28,6 +28,7 @@ public final class RichPaste {
     public static boolean insertInto(Object editor, String html) {
         try {
             if (html == null || html.isEmpty()) return false;
+            PrLog.dumpHtml(html);
             UdeDoc.Document model = HtmlToUde.convert(html);
             if (model.body.isEmpty()) { PrLog.log("boş model"); return false; }
             boolean ok = NativeInsert.insert(editor, model);
@@ -37,6 +38,118 @@ public final class RichPaste {
             PrLog.log("insertInto", t);
             return false;
         }
+    }
+
+    /**
+     * Pano RTF'ini (Pages/TextEdit/Mail — bu kaynaklar panoya HTML KOYMAZ, yalnız
+     * RTF/RTFD) macOS yerel `textutil` aracıyla HTML'e çevirip aynı boru hattından
+     * geçirir. textutil'in ürettiği HTML zaten &lt;style&gt; class kuralları + `font:`
+     * kısayolu + tablo-kenarlığı-class biçimindedir (HtmlToUde bunu çözer). Başarıda
+     * true; aksi halde false → çağıran düz-metne düşer.
+     */
+    public static boolean insertRtf(Object editor, java.awt.datatransfer.Transferable t) {
+        try {
+            // Birincil: pbrich (Cocoa) panoyu ekleriyle okur → imaj-GÖMÜLÜ HTML.
+            String html = pasteboardRichHtml();
+            if (html == null || html.isEmpty()) {
+                // Yedek: Transferable RTF → textutil (imaj YOK, ama metin/tablo/stil).
+                if (t == null) return false;
+                byte[] rtf = extractRtf(t);
+                if (rtf == null || rtf.length == 0) return false;
+                html = rtfToHtml(rtf);
+                if (html != null && !html.isEmpty()) PrLog.log("rtf yedeği (textutil) " + rtf.length + " bayt");
+            } else {
+                PrLog.log("pbrich html " + html.length());
+            }
+            if (html == null || html.isEmpty()) { PrLog.log("rtf→html boş"); return false; }
+            return insertInto(editor, html);
+        } catch (Throwable e) {
+            PrLog.log("insertRtf", e);
+            return false;
+        }
+    }
+
+    /**
+     * Jar'a gömülü pbrich (Swift/Cocoa) ikilisini geçici dosyaya çıkarıp çalıştırır;
+     * NSPasteboard'ı okuyup imaj-gömülü HTML döndürür. İkili yoksa / başarısızsa null
+     * (çağıran textutil yedeğine düşer). İkili bir kez çıkarılıp yeniden kullanılır.
+     */
+    private static synchronized String pasteboardRichHtml() {
+        try {
+            java.io.File bin = pbrichBinary();
+            if (bin == null) return null;
+            Process p = new ProcessBuilder(bin.getAbsolutePath()).redirectErrorStream(false).start();
+            byte[] out = readAll(p.getInputStream());
+            p.waitFor();
+            if (out.length == 0) return null;
+            return new String(out, StandardCharsets.UTF_8);
+        } catch (Throwable e) {
+            PrLog.log("pbrich", e);
+            return null;
+        }
+    }
+
+    private static java.io.File pbrichBin;
+
+    private static java.io.File pbrichBinary() throws Exception {
+        if (pbrichBin != null && pbrichBin.canExecute()) return pbrichBin;
+        java.io.InputStream is = RichPaste.class.getResourceAsStream("/macospasterich/pbrich");
+        if (is == null) return null;   // swiftc yoktu → ikili gömülmedi
+        try {
+            java.io.File f = java.io.File.createTempFile("ude-pbrich", "");
+            f.deleteOnExit();
+            byte[] bytes = readAll(is);
+            java.nio.file.Files.write(f.toPath(), bytes);
+            f.setExecutable(true, true);
+            pbrichBin = f;
+            return f;
+        } finally {
+            is.close();
+        }
+    }
+
+    /** Transferable'dan RTF baytlarını çıkarır (düz text/rtf, rtfd'ye tercih edilir). */
+    private static byte[] extractRtf(java.awt.datatransfer.Transferable t) throws Exception {
+        java.awt.datatransfer.DataFlavor best = null;
+        for (java.awt.datatransfer.DataFlavor f : t.getTransferDataFlavors()) {
+            String mt = f.getMimeType();
+            if (mt == null) continue;
+            String low = mt.toLowerCase();
+            if (low.contains("rtf")) {
+                if (low.contains("text/rtf") || low.contains("application/rtf")) { best = f; break; }
+                if (best == null) best = f;   // rtfd vb. — düz rtf yoksa yedek
+            }
+        }
+        if (best == null) return null;
+        Object data = t.getTransferData(best);
+        if (data instanceof byte[]) return (byte[]) data;
+        if (data instanceof java.io.InputStream) return readAll((java.io.InputStream) data);
+        if (data instanceof String) return ((String) data).getBytes(StandardCharsets.UTF_8);
+        return null;
+    }
+
+    /** RTF baytlarını macOS textutil ile HTML'e çevirir. */
+    private static String rtfToHtml(byte[] rtf) throws Exception {
+        java.io.File in = java.io.File.createTempFile("ude-paste", ".rtf");
+        try {
+            java.nio.file.Files.write(in.toPath(), rtf);
+            Process p = new ProcessBuilder("/usr/bin/textutil",
+                    "-convert", "html", "-encoding", "UTF-8", "-stdout", in.getAbsolutePath())
+                    .redirectErrorStream(false).start();
+            byte[] out = readAll(p.getInputStream());
+            p.waitFor();
+            return new String(out, StandardCharsets.UTF_8);
+        } finally {
+            in.delete();
+        }
+    }
+
+    private static byte[] readAll(java.io.InputStream is) throws Exception {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = is.read(buf)) >= 0) b.write(buf, 0, n);
+        return b.toByteArray();
     }
 
     /** Pano HTML'ini .udf (UDF zip) baytına çevirir; başarısızlıkta null. (Testler için.) */

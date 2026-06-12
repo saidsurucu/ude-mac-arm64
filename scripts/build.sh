@@ -492,6 +492,19 @@ apply_pasterich() {  # $1=JAR — patch_jar içinden çağrılır
 	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_prhelper" \
 		"$PASTERICH_SRC"/macospasterich/*.java \
 		|| { c_warn "[pasterich] dönüştürücü derlenemedi; yama atlandı."; return 0; }
+	# 1b) pbrich Swift yardımcısı: panoyu Cocoa ile okuyup imaj-GÖMÜLÜ HTML üretir
+	#     (Pages/TextEdit/Mail panoya yalnız RTF/RTFD koyar; textutil imajı dosya
+	#     referansı verir, bu ikili base64 data-uri gömer). Jar'a kaynak olarak konur,
+	#     RichPaste çalışma-anında çıkarıp çağırır. swiftc yoksa atlanır (textutil yedeği).
+	if command -v swiftc >/dev/null 2>&1; then
+		if swiftc -O "$PASTERICH_SRC/pbrich.swift" -o "$BUILD/_prhelper/macospasterich/pbrich" 2>/dev/null; then
+			c_ok "[pasterich] pbrich (pano→imaj-gömülü HTML) derlendi."
+		else
+			c_warn "[pasterich] pbrich derlenemedi; Pages imajı devre dışı (textutil yedeği metin/tablo verir)."
+		fi
+	else
+		c_warn "[pasterich] swiftc yok; Pages imajı devre dışı (textutil yedeği metin/tablo verir)."
+	fi
 	( cd "$BUILD/_prhelper" && zip -q -r "$JAR" macospasterich )
 	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
 	rm -rf "$BUILD/_prpatch"; mkdir -p "$BUILD/_prpatch/out"

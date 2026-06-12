@@ -38,6 +38,22 @@ final class PrLog {
         log(ctx + ": " + sw);
     }
 
+    /**
+     * Ham pano HTML'ini ayrı bir dosyaya yazar (her yapıştırmada üzerine yazar) —
+     * Google Docs/Pages/AI kaynaklarının gerçek HTML'ini yakalayıp parser'ı buna
+     * göre düzeltmek için. ~/Library/Logs/ude-pasterich-last.html
+     */
+    static void dumpHtml(String html) {
+        if (!ON || html == null) return;
+        try {
+            Path f = Paths.get(System.getProperty("user.home"), "Library", "Logs", "ude-pasterich-last.html");
+            Files.createDirectories(f.getParent());
+            Files.write(f, html.getBytes("UTF-8"),
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        } catch (Throwable ignore) {
+        }
+    }
+
     private PrLog() {
     }
 }
