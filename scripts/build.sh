@@ -44,6 +44,7 @@ PASTE_SRC="$SCRIPT_DIR/macos-pasteimage" # panodan imaj yapıştırma (macOS cas
 PASTERICH_SRC="$SCRIPT_DIR/macos-pasterich" # harici stilli yapıştırma (Word/tarayıcı/PDF→UDE) yaması
 RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle" # otomatik düzeltme seçenekleri anında etkin
+ANTET_SRC="$SCRIPT_DIR/antet" # Antetlerim: arka plan diyaloğunda kişisel antet bölümü
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
@@ -53,6 +54,7 @@ PASTEIMG="${PASTEIMG:-1}" # 1=açık (varsayılan; panodan imaj yapıştırma ma
 IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçlarıyla boyutlandırma) | 0=kapalı
 SKIN="${SKIN:-1}"       # 1=açık (varsayılan; modern düz Substance skin + Flamingo şerit + font + teal arka plan nötr gri) | 0=kapalı
 LIVETOGGLE="${LIVETOGGLE:-1}" # 1=açık (varsayılan; Otomatik Büyük Harf vb. toggle'lar restart'sız etkin) | 0=kapalı
+ANTET="${ANTET:-1}" # 1=açık (varsayılan; Antetlerim bölümü + sayfaya sığdırma) | 0=kapalı
 TEXTREPLACE="${TEXTREPLACE:-1}" # 1=açık (varsayılan; macOS Metin Değiştirme kısayolları UDE'de) | 0=kapalı
 PASTERICH="${PASTERICH:-1}" # 1=açık (varsayılan; harici stilli yapıştırma — Word/tarayıcı/PDF→UDE) | 0=kapalı
 
@@ -570,6 +572,42 @@ apply_livetoggle() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[livetoggle] seçenekler artık anında etkin (restart gerekmez)."
 }
 
+apply_antet() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$ANTET" = "1" ] || return 0
+	# İdempotans: helper zaten enjekte edilmişse atla.
+	# grep -q DEĞİL (SIGPIPE/pipefail tuzağı): grep tüm girdiyi okuyup >/dev/null'a yazar.
+	if unzip -l "$JAR" 2>/dev/null | grep 'macosantet/AntetUI.class' >/dev/null 2>&1; then
+		c_ok "[antet] zaten yamalı, atlandı."; return 0
+	fi
+	c_info "[antet] Antetlerim bölümü yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[antet] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[antet] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
+	# 1) helper'ları derle + jar'a enjekte et (patcher'dan ÖNCE; insertAfter
+	#    derlemesi AntetUI'yi jar classpath'inden çözer)
+	rm -rf "$BUILD/_antethelper"; mkdir -p "$BUILD/_antethelper"
+	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_antethelper" \
+		"$ANTET_SRC/macosantet/AntetLog.java" \
+		"$ANTET_SRC/macosantet/AntetStore.java" \
+		"$ANTET_SRC/macosantet/AntetUI.java" \
+		|| { c_warn "[antet] helper derlenemedi; yama atlandı."; return 0; }
+	( cd "$BUILD/_antethelper" && zip -q -r "$JAR" macosantet )
+	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
+	rm -rf "$BUILD/_antetpatch"; mkdir -p "$BUILD/_antetpatch/out"
+	"$jc" --release 11 -encoding UTF-8 -cp "$jvs" -d "$BUILD/_antetpatch" "$ANTET_SRC/AntetPatch.java" \
+		|| { c_warn "[antet] AntetPatch derlenemedi; yama atlandı."; return 0; }
+	if ! "$jr" -cp "$BUILD/_antetpatch:$jvs" AntetPatch "$JAR" "$BUILD/_antetpatch/out"; then
+		# Yarım-yama bırakma: helper'ı geri çıkar ki idempotans kontrolü yanılmasın.
+		zip -q -d "$JAR" 'macosantet/*' >/dev/null 2>&1 || true
+		c_warn "[antet] diyalog yaması uygulanamadı (UDE sürümü değişmiş olabilir); yama geri alındı."
+		return 0
+	fi
+	( cd "$BUILD/_antetpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[antet] Antetlerim bölümü eklendi (kişisel antetler + sayfaya sığdırma)."
+}
+
 apply_skin() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$SKIN" = "1" ] || return 0
@@ -641,6 +679,7 @@ patch_jar() {
 	apply_pasterich "$JAR"
 	apply_imgresize "$JAR"
 	apply_livetoggle "$JAR"
+	apply_antet "$JAR"
 	apply_skin "$JAR"
 	unzip -l "$JAR" | grep "Mac/$SQLITE_ARCH/libsqlitejdbc.dylib" >/dev/null || die "sqlite swap başarısız!"
 	unzip -p "$JAR" META-INF/MANIFEST.MF | grep 'WPAppManager' >/dev/null || die "Main-Class kayboldu!"
@@ -815,6 +854,8 @@ Ortam: UDE_URL (boşsa indirme sayfasından güncel MAC paketi otomatik çözül
        LIVETOGGLE (1=açık varsayılan | 0=kapalı; Otomatik Büyük Harf / Baş
                  Harfler Büyük / Kelime Denetimi toggle'ları restart'sız anında
                  etkinleşir, "yeniden başlat" diyaloğu kalkar)
+       ANTET (1=açık varsayılan | 0=kapalı; Arka Plan diyaloğunda Antetlerim
+                 bölümü: kişisel antetler tek tıkla + sayfaya sığdırma)
 EOF
 }
 
@@ -827,6 +868,7 @@ case "${1:-all}" in
 	paste-rich) apply_pasterich "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-resize) apply_imgresize "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	live-toggle) apply_livetoggle "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	antet) apply_antet "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	skin) SKIN=1 apply_skin "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	package) package ;; sign) sign ;; dmg) dmg ;; clean) clean ;; distclean) distclean ;;
 	help|-h|--help) help ;;
