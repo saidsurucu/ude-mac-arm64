@@ -1,8 +1,17 @@
 # Harici stilli yapıştırma (PASTERICH) — Tasarım
 
 **Tarih:** 2026-06-12
-**Durum:** Tasarım onayı bekliyor
+**Durum:** Uygulandı + uçtan uca doğrulandı (canlı GUI paste testi kullanıcıda)
 **Branch:** `feature/paste-rich-text`
+
+> **PİVOT (2026-06-12):** İlk tasarım dönüşümü paketli udf-cli ikilisiyle (alt
+> süreç) yapıyordu. Kullanıcı talebiyle dönüştürücü **tamamen saf Java'da**
+> yeniden yazıldı (harici ikili/alt süreç YOK). udf-cli yalnızca şema/algoritma
+> **referansı** olarak kullanıldı; saf-Java çıktısı udf-cli ile byte-identical
+> doğrulandı. Güncel mimari: pano HTML → `macospasterich` saf-Java dönüştürücü
+> (Html tokenizer → HtmlToUde model → UdeXml content.xml → java.util.zip .udf)
+> → `WPDocumentPanel.a(InputStream)` → select-all/copy/paste. Besleme spike'ı
+> gerçek editor-app.jar'a karşı headless geçti (DocumentEx.getLength>0).
 
 ## Problem
 
