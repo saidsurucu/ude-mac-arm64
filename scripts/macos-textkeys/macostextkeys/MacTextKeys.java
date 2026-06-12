@@ -163,6 +163,9 @@ public final class MacTextKeys {
             am.put(ACT_DELETE_TO_LINE_START, DELETE_TO_LINE_START);
         }
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, CMD), ACT_DELETE_TO_LINE_START);
+
+        // Word benzeri Backspace/Delete ile tablo silme.
+        TableDelete.bind(tc);
     }
 
     /**
