@@ -39,12 +39,43 @@ final class NativeInsert {
             javax.swing.text.JTextComponent tc = (javax.swing.text.JTextComponent) editor;
             StyledDocument doc = (StyledDocument) tc.getDocument();
             int pos = tc.getCaretPosition();
-            insertBlocks(editor, doc, model.body, pos);
+            insertBlocks(editor, doc, trimEmpties(model.body), pos);
             return true;
         } catch (Throwable t) {
             PrLog.log("NativeInsert.insert", t);
             return false;
         }
+    }
+
+    /**
+     * Baştaki/sondaki boş paragrafları atar ve ardışık 2+ boş paragrafı tek'e
+     * indirir (Word fazladan boş satır üretiyor). Boş = liste değil + tüm run'lar
+     * boş/yalnız-boşluk. Tablo/resimli paragraflar korunur.
+     */
+    private static List<Block> trimEmpties(List<Block> blocks) {
+        List<Block> out = new ArrayList<>();
+        boolean prevEmpty = false;
+        for (Block b : blocks) {
+            boolean empty = isEmptyPara(b);
+            if (empty && (out.isEmpty() || prevEmpty)) continue;   // baş + ardışık
+            out.add(b);
+            prevEmpty = empty;
+        }
+        while (!out.isEmpty() && isEmptyPara(out.get(out.size() - 1))) {
+            out.remove(out.size() - 1);                            // son
+        }
+        return out;
+    }
+
+    private static boolean isEmptyPara(Block b) {
+        if (!(b instanceof Paragraph)) return false;
+        Paragraph p = (Paragraph) b;
+        if (p.list != null) return false;
+        for (Run r : p.runs) {
+            if (r instanceof UdeDoc.ImageRun) return false;
+            if (r instanceof TextRun && !clean(((TextRun) r).text).trim().isEmpty()) return false;
+        }
+        return true;
     }
 
     /** Blokları sırayla pos'a ekler; eklenen toplam uzunluğu döndürür. */
@@ -76,10 +107,8 @@ final class NativeInsert {
             }
             // TabRun şimdilik atlanır
         }
-        // paragraf öznitelikleri (hizalama)
-        SimpleAttributeSet pa = new SimpleAttributeSet();
-        StyleConstants.setAlignment(pa, para.alignment);
-        if (pos > paraStart) doc.setParagraphAttributes(paraStart, pos - paraStart, pa, false);
+        // paragraf öznitelikleri (hizalama + girintiler + aralık)
+        if (pos > paraStart) doc.setParagraphAttributes(paraStart, pos - paraStart, paraAttrs(para), false);
         // paragraf sonlandırıcı
         doc.insertString(pos, "\n", null);
         pos += 1;
@@ -146,9 +175,7 @@ final class NativeInsert {
                     pos += insertImage(editor, doc, (UdeDoc.ImageRun) r, pos);
                 }
             }
-            SimpleAttributeSet pa = new SimpleAttributeSet();
-            StyleConstants.setAlignment(pa, p.alignment);
-            if (pos > ps) doc.setParagraphAttributes(ps, pos - ps, pa, false);
+            if (pos > ps) doc.setParagraphAttributes(ps, pos - ps, paraAttrs(p), false);
         }
     }
 
@@ -200,7 +227,10 @@ final class NativeInsert {
             java.awt.image.BufferedImage img =
                     javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
             if (img == null) { PrLog.log("resim decode edilemedi"); return 0; }
-            double w = img.getWidth(), h = img.getHeight();
+            // Word'ün görüntü boyutunu (HTML width/height) onurlandır; yoksa doğal boyut.
+            double w, h;
+            if (ir.width > 1 && ir.height > 1) { w = ir.width; h = ir.height; }
+            else { w = img.getWidth(); h = img.getHeight(); }
             double maxW = 480;   // sayfa yazılabilir genişliğine kaba sığdırma (pt)
             if (w > maxW) { h = h * maxW / w; w = maxW; }
             // caret'i ekleme noktasına al; UDE resmi caret'e ekler
@@ -232,6 +262,18 @@ final class NativeInsert {
         return t.replaceAll("[\\r\\n]+", " ");
     }
 
+    /** Paragraf öznitelikleri: hizalama + girintiler + aralık (StyleConstants). */
+    private static SimpleAttributeSet paraAttrs(Paragraph p) {
+        SimpleAttributeSet pa = new SimpleAttributeSet();
+        StyleConstants.setAlignment(pa, p.alignment);
+        if (p.leftIndent != 0) StyleConstants.setLeftIndent(pa, (float) p.leftIndent);
+        if (p.rightIndent != 0) StyleConstants.setRightIndent(pa, (float) p.rightIndent);
+        if (p.firstLineIndent != 0) StyleConstants.setFirstLineIndent(pa, (float) p.firstLineIndent);
+        if (p.spaceBefore != 0) StyleConstants.setSpaceAbove(pa, (float) p.spaceBefore);
+        if (p.spaceAfter != 0) StyleConstants.setSpaceBelow(pa, (float) p.spaceAfter);
+        return pa;
+    }
+
     // ---- karakter öznitelikleri (StyleConstants) ----
     private static AttributeSet charAttrs(TextStyle s) {
         SimpleAttributeSet a = new SimpleAttributeSet();
@@ -241,6 +283,7 @@ final class NativeInsert {
         if (s.italic) StyleConstants.setItalic(a, true);
         if (s.underline) StyleConstants.setUnderline(a, true);
         if (s.color != -16777216) StyleConstants.setForeground(a, new Color(s.color, true));
+        if (s.backgroundColor != -1) StyleConstants.setBackground(a, new Color(s.backgroundColor, true));
         return a;
     }
 
