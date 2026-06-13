@@ -45,6 +45,7 @@ PASTERICH_SRC="$SCRIPT_DIR/macos-pasterich" # harici stilli yapıştırma (Word/
 RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle" # otomatik düzeltme seçenekleri anında etkin
 ANTET_SRC="$SCRIPT_DIR/antet" # Antetlerim: arka plan diyaloğunda kişisel antet bölümü
+CARET_SRC="$SCRIPT_DIR/macos-caret"     # metin imleci temiz 1px çizim yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
@@ -57,6 +58,7 @@ LIVETOGGLE="${LIVETOGGLE:-1}" # 1=açık (varsayılan; Otomatik Büyük Harf vb.
 ANTET="${ANTET:-1}" # 1=açık (varsayılan; Antetlerim bölümü + sayfaya sığdırma) | 0=kapalı
 TEXTREPLACE="${TEXTREPLACE:-1}" # 1=açık (varsayılan; macOS Metin Değiştirme kısayolları UDE'de) | 0=kapalı
 PASTERICH="${PASTERICH:-1}" # 1=açık (varsayılan; harici stilli yapıştırma — Word/tarayıcı/PDF→UDE) | 0=kapalı
+CARETFIX="${CARETFIX:-1}" # 1=açık (varsayılan; metin imleci temiz 1px çizim, harf gövdesine binmez) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -423,6 +425,23 @@ apply_filedialog() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[filedialog] native dosya pencereleri yaması uygulandı."
 }
 
+apply_caretfix() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$CARETFIX" = "1" ] || return 0
+	c_info "[caret] metin imleci temiz 1px çizim yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[caret] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[caret] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ortak)
+	rm -rf "$BUILD/_caretpatch"; mkdir -p "$BUILD/_caretpatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_caretpatch" "$CARET_SRC/CaretPatch.java" \
+		|| { c_warn "[caret] CaretPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_caretpatch:$jvs" CaretPatch "$JAR" "$BUILD/_caretpatch/out" \
+		|| die "[caret] imleç yaması uygulanamadı (UDE sürümü değişmiş olabilir)."
+	( cd "$BUILD/_caretpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[caret] temiz 1px imleç yaması uygulandı."
+}
+
 apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$IMGFULL" = "1" ] || return 0
@@ -687,6 +706,7 @@ patch_jar() {
 	apply_icons "$JAR"
 	apply_fop_fonts "$JAR"
 	apply_filedialog "$JAR"
+	apply_caretfix "$JAR"
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
 	apply_pasterich "$JAR"
@@ -876,6 +896,7 @@ case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
 	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; lookagent) lookagent ;; patch) patch_jar ;;
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	caret-fix) CARETFIX=1 apply_caretfix "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-rich) apply_pasterich "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
