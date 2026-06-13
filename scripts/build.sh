@@ -620,6 +620,7 @@ patch_jar() {
 	apply_icons "$JAR"
 	apply_fop_fonts "$JAR"
 	apply_filedialog "$JAR"
+	apply_caretfix "$JAR"
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
 	apply_imgresize "$JAR"
@@ -805,6 +806,7 @@ case "${1:-all}" in
 	all) all ;; check-deps) check_deps ;; jdk) jdk ;; jpackage-jdk) jpackage_jdk ;;
 	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; lookagent) lookagent ;; patch) patch_jar ;;
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	caret-fix) CARETFIX=1 apply_caretfix "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-resize) apply_imgresize "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
