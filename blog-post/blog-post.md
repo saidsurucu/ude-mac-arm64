@@ -12,6 +12,8 @@ Every petition, every motion, every piece of evidence, every court filing flows 
 
 And UYAP doesn't speak PDF, or `.docx`, or anything you've heard of. It speaks **UDF** — *UYAP Doküman Formatı* — a proprietary document format designed so that legal documents carry an embedded electronic-signature integrity guarantee. A `.udf` file is really a zip containing the document's XML plus a detached CAdES-BES signature. You cannot legally file a document unless it's a properly structured, properly signed `.udf`.
 
+I happen to know that because I'd already taken the format apart. Long before this Mac project — and before Claude Code existed — I reverse-engineered UDF myself and published it as an open-source project, [**UDF-Toolkit**](https://github.com/saidsurucu/UDF-Toolkit): Python tools to convert `.udf` to and from DOCX and PDF, plus written documentation of a format the Ministry never publicly specified. (It has since collected 70-plus GitHub stars from other people who needed the same escape hatch.) That hard-won map of the format is exactly what made the hardest parts of *this* project possible — for example, rebuilding tables pasted from Word as *genuine* UDF tables rather than flattened text.
+
 To create, edit and sign those files there is exactly one official tool: the **UYAP Doküman Editörü** (UYAP Document Editor, "UDE") — a free Java desktop application distributed by the Ministry of Justice. It is the only sanctioned way in.
 
 And here's the thing: this isn't a tool for lawyers. It's a tool for *everyone who works with the courts*. Consider the scale of the captive audience:
@@ -106,11 +108,13 @@ A government shipped a mandatory tool and stopped at "works on Windows." A platf
 
 It's not a tool you can replace (the format is mandated) or fix at the source (it's closed and obfuscated). The only available move is to meet the binary where it is and bend it, carefully, from the outside. That used to be the kind of work that needed a reverse-engineering specialist and a clear month — which, realistically, meant it never got done. The people feeling the pain and the people capable of fixing it were two different, rarely-overlapping groups.
 
-What changed is that the gap between *feeling a problem* and *being able to fix it* got smaller. A developer who actually lives inside `.udf` files every day could sit down with an AI assistant and grind through twenty real fixes that would once have needed a reverse-engineering specialist and a clear month. That's the version of this technology worth caring about: not software that replaces the person who cares, but software that lets them finish the job.
+What changed is that the gap between *feeling a problem* and *being able to fix it* got smaller. Someone who lives inside `.udf` files every day — and who had already reverse-engineered the format once, by hand — could sit down with an AI assistant and grind through twenty real fixes that would otherwise have needed a reverse-engineering specialist and a clear month. That's the version of this technology worth caring about: not software that replaces the person who cares, but software that lets them finish the job.
 
 Each of those fixes removes a daily papercut for people who never asked to be Java troubleshooters, and who just want to write a petition on the laptop they already own. That's the wound this closed. Quietly, one obfuscated method at a time.
 
 ---
+
+> **The format work.** The UDF format knowledge behind this project comes from an earlier, independent reverse-engineering effort, published as the open-source [UDF-Toolkit](https://github.com/saidsurucu/UDF-Toolkit) (Python; `.udf` ↔ DOCX/PDF conversion plus format documentation).
 
 > **About the project.** This is an independent, unofficial macOS patch — not developed or endorsed by any public institution. The repository contains only patch and build scripts; the official editor is downloaded by the user from `uyap.gov.tr` at build time, and the patch is applied locally on the user's own machine. No prebuilt binaries are distributed. Provided "as is."
 
