@@ -299,13 +299,13 @@ dss	auto	cube_24_regular	all=#444444
 dssBig	auto	cube_24_regular	all=#444444
 dssSmall	auto	cube_16_filled	all=#444444
 timeStamp	auto	clock_24_regular	all=#D9A21B
-certificate	auto	certificate_24_regular	all=#444444
+certificate	auto	KEEP	-
 certificateValid	auto	certificate_24_regular	all=#107C41
 certificateInvalid	auto	certificate_24_regular	all=#D13438
 certificateQuestion	auto	certificate_24_regular	all=#D9A21B
-certificates	auto	certificate_24_regular	all=#444444
-certificateSB	auto	certificate_16_filled	all=#444444
-certificateSBG	auto	certificate_16_filled	all=#107C41
+certificates	auto	KEEP	-
+certificateSB	auto	KEEP	-
+certificateSBG	auto	KEEP	-
 judgement	auto	gavel_24_regular	all=#D9A21B
 hak_tanik	auto	person_note_16_filled	all=#444444
 addWitness	auto	person_add_24_regular	all=#107C41
@@ -327,7 +327,7 @@ warningIconBg	auto	circle_16_filled	all=#D9A21B
 warningIconFr	auto	error_circle_16_filled	all=#D13438
 # --- jar'da olup override'ı olmayanlar (boyut açık yazılır) ---
 apdu	24x24	payment_24_regular	all=#444444
-certificate72	72x72	certificate_24_regular	all=#D9A21B
+certificate72	72x72	KEEP	-
 CMK_147	24x24	book_24_regular	all=#444444
 erasable	36x35	eraser_24_regular	all=#107C41
 notErasable	35x35	eraser_24_regular	all=#D13438
