@@ -35,8 +35,14 @@ public class CaretPatch {
 
         CtClass s = pool.get("tr.com.havelsan.uyap.system.editor.common.s");
         CtMethod draw = s.getMethod("a", "(Ljava/awt/Graphics;Ljava/awt/Rectangle;)V");
-        // $1 = Graphics, $2 = Rectangle (instance metot)
-        draw.setBody("{ $1.fillRect($2.x, $2.y + 2, 1, $2.height - 3); }");
+        // $1 = Graphics, $2 = Rectangle (instance metot).
+        // Orijinal: fillRect(x+1, y+2, 2, h-3) — 2px GENİŞ (kalın). 1px'e indir ama
+        // +1 KAYDIRMAYI KORU: modelToView'ın p.a'sı x'e -1 uygular (device köprüsü);
+        // +1 bunu telafi edip imleci GERÇEK glyph sınırına (harfler arası boşluğa)
+        // oturtur. +1 sabittir (zoom'la ölçeklenmez → kayma yapmaz; zoom kayması
+        // ayrıca O.modelToView p.c'siyle çözülür). +1'i atmak imleci 1px sola → yoğun
+        // fontlarda (m) önceki harfin üstüne bindiriyordu.
+        draw.setBody("{ $1.fillRect($2.x + 1, $2.y + 2, 1, $2.height - 3); }");
         writeClass(s, outDir);
         System.out.println("[CaretPatch] common.s.a(Graphics,Rectangle) temiz 1px imlec yamasi uygulandi.");
 
