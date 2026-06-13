@@ -421,6 +421,23 @@ apply_filedialog() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[filedialog] native dosya pencereleri yaması uygulandı."
 }
 
+apply_caretfix() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$CARETFIX" = "1" ] || return 0
+	c_info "[caret] metin imleci temiz 1px çizim yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[caret] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[caret] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ortak)
+	rm -rf "$BUILD/_caretpatch"; mkdir -p "$BUILD/_caretpatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_caretpatch" "$CARET_SRC/CaretPatch.java" \
+		|| { c_warn "[caret] CaretPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_caretpatch:$jvs" CaretPatch "$JAR" "$BUILD/_caretpatch/out" \
+		|| die "[caret] imleç yaması uygulanamadı (UDE sürümü değişmiş olabilir)."
+	( cd "$BUILD/_caretpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[caret] temiz 1px imleç yaması uygulandı."
+}
+
 apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$IMGFULL" = "1" ] || return 0
