@@ -43,6 +43,7 @@ SKIN_SRC="$SCRIPT_DIR/skin"             # modern düz skin + Flamingo şerit pai
 PASTE_SRC="$SCRIPT_DIR/macos-pasteimage" # panodan imaj yapıştırma (macOS cast) yaması
 RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle" # otomatik düzeltme seçenekleri anında etkin
+CARET_SRC="$SCRIPT_DIR/macos-caret"     # metin imleci temiz 1px çizim yaması
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
@@ -53,6 +54,7 @@ IMGRESIZE="${IMGRESIZE:-1}" # 1=açık (varsayılan; imajı köşe tutamaçları
 SKIN="${SKIN:-1}"       # 1=açık (varsayılan; modern düz Substance skin + Flamingo şerit + font + teal arka plan nötr gri) | 0=kapalı
 LIVETOGGLE="${LIVETOGGLE:-1}" # 1=açık (varsayılan; Otomatik Büyük Harf vb. toggle'lar restart'sız etkin) | 0=kapalı
 TEXTREPLACE="${TEXTREPLACE:-1}" # 1=açık (varsayılan; macOS Metin Değiştirme kısayolları UDE'de) | 0=kapalı
+CARETFIX="${CARETFIX:-1}" # 1=açık (varsayılan; metin imleci temiz 1px çizim, harf gövdesine binmez) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
