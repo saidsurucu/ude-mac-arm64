@@ -13,6 +13,20 @@ ve `.udf` dosyalarına **çift tıklayarak** açabilirsiniz.
 
 > Modern Material ikonlar + Java 11 HiDPI ile **Retina'da keskin** metin ve arayüz.
 
+### Önce / Sonra
+
+Aynı belge, aynı Retina ekranda. **Solda** resmî paket (Rosetta + Java 8: tüm pencere
+bulanık); **sağda** bu derleme (native + Java 11: metin keskin, modern düz Word-2026
+görünümü ve koyu mod).
+
+| Öncesi — resmî paket (bulanık) | Sonrası — bu derleme (keskin, koyu) |
+|:---:|:---:|
+| ![Önce: bulanık, eski turkuaz görünüm](assets/before-blurry.png) | ![Sonra: keskin, koyu Word-2026 görünümü](assets/after-word2026.png) |
+
+> Modern görünüm, sistem teması neyse onu takip eder — açık modda da aynı düz Word-2026 arayüzü:
+
+![Açık modda Word-2026 görünümü](assets/after-word2026-light.png)
+
 > ⚠️ **Bu depo UYAP Doküman Editörü'nün kaynak kodunu içermez.** Tamamen bağımsız,
 > **gayriresmî** bir Mac **yamasıdır**: hiçbir kamu kurumu tarafından
 > geliştirilmemiş/onaylanmamıştır. Burada bulunan yalnızca yama ve build betikleridir;
