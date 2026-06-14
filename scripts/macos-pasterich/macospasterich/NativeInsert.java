@@ -1,9 +1,19 @@
 package macospasterich;
 
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Window;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
+import javax.swing.ComboBoxModel;
+import javax.swing.JComboBox;
+import javax.swing.MutableComboBoxModel;
+import javax.swing.SwingUtilities;
 
 import javax.swing.text.AttributeSet;
 import javax.swing.text.Element;
@@ -48,10 +58,21 @@ final class NativeInsert {
             // bir baş paragraf yaratır (tablo bağlamı değil; hücre bölünmez),
             // tabloyu offset 1'e iter → Backspace ile silinebilir olur.
             if (start == 0 && !body.isEmpty() && body.get(0) instanceof Table) {
-                doc.insertString(0, "\n", null);
+                doc.insertString(0, "\n", DEFAULT_BREAK);
                 start = 1;
             }
             int delta = insertBlocks(editor, doc, body, start);
+            // Yapıştırılan fontları şerit font kutusunda SEÇİLEBİLİR yap: macOS'ta
+            // YÜKLÜ OLMAYAN fontlar (Calibri/Aptos/Cambria…) kutu listesinde yoktur →
+            // caret bu metne inince UDE'nin setSelectedItem(ad) çağrısı sessizce
+            // başarısız olur, kutu eski değerde (Times) takılı kalır. Font adlarını
+            // kutu modeline ekleyince UDE'nin mevcut senkronu adı gösterebilir (Word
+            // da yüklü olmayan font adlarını gösterir). Render DEĞİŞMEZ (yedek fontla
+            // çizim aynı kalır); yalnız kutu metni doğrulanır. setCaretPosition'dan
+            // ÖNCE çağrılır ki caret senkronu eklenmiş adı bulsun.
+            Set<String> fams = new HashSet<String>();
+            collectFamilies(body, fams);
+            ensureFontsSelectable(tc, fams);
             // İmleci eklenen içeriğin SONUNA al: resim ekleme (insertImage) caret'i
             // ekleme noktasına taşır, sonraki içerik (tablo/paragraf) doc.insertString
             // ile eklenince caret onları takip etmez → imleç belge ortasında kalırdı.
@@ -103,7 +124,7 @@ final class NativeInsert {
             } else if (b instanceof Table) {
                 pos = insertTable(editor, doc, (Table) b, pos);
             } else if (b instanceof UdeDoc.PageBreak) {
-                doc.insertString(pos, "\n", null);
+                doc.insertString(pos, "\n", DEFAULT_BREAK);
                 pos += 1;
             }
         }
@@ -125,8 +146,10 @@ final class NativeInsert {
         }
         // paragraf sonlandırıcı ÖNCE eklenir ki paragraf \n ile sınırlansın;
         // aksi halde liste/hizalama öznitelikleri bir sonraki paragrafa sızar
-        // (bullet+number aynı paragrafa binip yanlış işaret çizilir).
-        doc.insertString(pos, "\n", null);
+        // (bullet+number aynı paragrafa binip yanlış işaret çizilir). "\n" GERÇEK
+        // bir font taşır (breakAttrs) — fontsuz "\n" Monospaced'e düşürür (bkz.
+        // DEFAULT_BREAK notu): caret bu satıra indiğinde yazım daktilo fontuyla çıkardı.
+        doc.insertString(pos, "\n", breakAttrs(para));
         pos += 1;
         // paragraf öznitelikleri — replace=TRUE: UDE her yeni paragrafı bir öncekinin
         // özniteliklerini MİRAS alarak kurar; replace=false yalnız EKLER → bullet bir
@@ -188,7 +211,7 @@ final class NativeInsert {
         for (Block b : cell.content) {
             if (!(b instanceof Paragraph)) continue;
             Paragraph p = (Paragraph) b;
-            if (!first) { doc.insertString(pos, "\n", null); pos += 1; }
+            if (!first) { doc.insertString(pos, "\n", breakAttrs(p)); pos += 1; }
             first = false;
             int ps = pos;
             for (Run r : p.runs) {
@@ -316,6 +339,32 @@ final class NativeInsert {
         return pa;
     }
 
+    /**
+     * Paragraf-sonu / yapısal "\n" karakterleri için öznitelik. ASLA null/boş
+     * BIRAKMA: Swing'de FontFamily özniteliği OLMAYAN içeriği StyleConstants
+     * "Monospaced"a düşürür (StyleConstants.getFontFamily varsayılanı) → caret bu
+     * "\n"e/boş paragrafa indiğinde editörün giriş öznitelikleri fontsuz kalır,
+     * sonraki TÜM yazım daktilo (Monospaced) fontuyla çıkar ve "düzelmez"
+     * (her Enter yeni fontsuz "\n" ekler → kaskat). Bu yüzden her "\n" gerçek
+     * bir font taşır: paragrafın son metin run'ının fontu, yoksa makul varsayılan.
+     */
+    private static final AttributeSet DEFAULT_BREAK;
+    static {
+        SimpleAttributeSet a = new SimpleAttributeSet();
+        StyleConstants.setFontFamily(a, "Times New Roman");
+        StyleConstants.setFontSize(a, 12);
+        DEFAULT_BREAK = a;
+    }
+
+    /** Paragraf sonlandırıcı "\n" için: son metin run'ının fontu (yoksa varsayılan). */
+    private static AttributeSet breakAttrs(Paragraph p) {
+        for (int i = p.runs.size() - 1; i >= 0; i--) {
+            Run r = p.runs.get(i);
+            if (r instanceof TextRun) return charAttrs(((TextRun) r).style);
+        }
+        return DEFAULT_BREAK;
+    }
+
     // ---- karakter öznitelikleri (StyleConstants) ----
     private static AttributeSet charAttrs(TextStyle s) {
         SimpleAttributeSet a = new SimpleAttributeSet();
@@ -327,6 +376,72 @@ final class NativeInsert {
         if (s.color != -16777216) StyleConstants.setForeground(a, new Color(s.color, true));
         if (s.backgroundColor != -1) StyleConstants.setBackground(a, new Color(s.backgroundColor, true));
         return a;
+    }
+
+    // ---- şerit font kutusu: yüklü olmayan yapıştırma fontlarını seçilebilir yap ----
+
+    /** Modeldeki tüm metin run'larının (tablo hücreleri dahil) font ailelerini toplar. */
+    private static void collectFamilies(List<Block> blocks, Set<String> out) {
+        for (Block b : blocks) {
+            if (b instanceof Paragraph) {
+                for (Run r : ((Paragraph) b).runs) {
+                    if (r instanceof TextRun) out.add(((TextRun) r).style.fontFamily);
+                }
+            } else if (b instanceof Table) {
+                for (TableRow row : ((Table) b).rows) {
+                    for (TableCell c : row.cells) collectFamilies(c.content, out);
+                }
+            }
+        }
+    }
+
+    /**
+     * Editörün penceresindeki font kutularını (Times New Roman imzalı) bulur ve
+     * verilen ailelerden modelde OLMAYANLARI ekler → caret senkronu o adı seçebilir.
+     * Render'a/belgeye dokunmaz (yalnız kutu modeli). EDT'de çağrılmalı (paste EDT'de).
+     */
+    private static void ensureFontsSelectable(javax.swing.text.JTextComponent editor, Set<String> families) {
+        try {
+            if (families.isEmpty()) return;
+            Window w = SwingUtilities.getWindowAncestor(editor);
+            if (w == null) return;
+            List<JComboBox> combos = new ArrayList<JComboBox>();
+            findFontCombos(w, combos);
+            for (JComboBox cb : combos) {
+                ComboBoxModel m = cb.getModel();
+                if (!(m instanceof MutableComboBoxModel)) continue;
+                Set<String> have = new HashSet<String>();
+                for (int i = 0; i < m.getSize(); i++) {
+                    Object it = m.getElementAt(i);
+                    if (it != null) have.add(it.toString());
+                }
+                for (String f : families) {
+                    if (f != null && !f.isEmpty() && !have.contains(f)) {
+                        ((MutableComboBoxModel) m).addElement(f);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            PrLog.log("ensureFontsSelectable", t);
+        }
+    }
+
+    /**
+     * Font kutusu imzası: modelinde "Times New Roman" geçen JComboBox. Model
+     * alfabetik sıralı (~192 öğe) → "Times New Roman" 100. indeksin ÖTESİNDE (T),
+     * bu yüzden TÜM model taranır (ilk-N kısıtlaması kutuyu kaçırıyordu).
+     */
+    private static void findFontCombos(Component c, List<JComboBox> out) {
+        if (c instanceof JComboBox) {
+            ComboBoxModel m = ((JComboBox) c).getModel();
+            for (int i = 0; i < m.getSize(); i++) {
+                Object it = m.getElementAt(i);
+                if (it != null && "Times New Roman".equals(it.toString())) { out.add((JComboBox) c); break; }
+            }
+        }
+        if (c instanceof Container) {
+            for (Component k : ((Container) c).getComponents()) findFontCombos(k, out);
+        }
     }
 
     // ---- reflection köprüleri (UDE iç tipleri) ----
