@@ -58,6 +58,7 @@ LIVETOGGLE="${LIVETOGGLE:-1}" # 1=açık (varsayılan; Otomatik Büyük Harf vb.
 ANTET="${ANTET:-1}" # 1=açık (varsayılan; Antetlerim bölümü + sayfaya sığdırma) | 0=kapalı
 TEXTREPLACE="${TEXTREPLACE:-1}" # 1=açık (varsayılan; macOS Metin Değiştirme kısayolları UDE'de) | 0=kapalı
 PASTERICH="${PASTERICH:-1}" # 1=açık (varsayılan; harici stilli yapıştırma — Word/tarayıcı/PDF→UDE) | 0=kapalı
+PLAINPASTE="${PLAINPASTE:-1}" # 1=açık (varsayılan; Formatsız Yapıştır ⌘⇧V + sağ tık; PASTERICH'e bağlı) | 0=kapalı
 CARETFIX="${CARETFIX:-1}" # 1=açık (varsayılan; metin imleci temiz 1px çizim, harf gövdesine binmez) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
@@ -538,6 +539,36 @@ apply_pasterich() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[pasterich] harici stilli yapıştırma yaması uygulandı."
 }
 
+apply_plainpaste() {  # $1=JAR — patch_jar içinden çağrılır (apply_pasterich'TEN SONRA)
+	local JAR="$1"
+	[ "$PLAINPASTE" = "1" ] || return 0
+	# PlainPaste sınıfı pasterich tarafından enjekte edilir; PASTERICH kapalıysa yok.
+	if ! unzip -l "$JAR" 2>/dev/null | grep 'macospasterich/PlainPaste.class' >/dev/null 2>&1; then
+		c_warn "[plainpaste] macospasterich/PlainPaste yok (PASTERICH kapalı?); yama atlandı."; return 0
+	fi
+	# İdempotans: EditContextMenuWidget$1 zaten yamalıysa patcher kendisi atlar
+	# (boş çıktı üretir); aşağıda org/ dizini kontrol edilir.
+	c_info "[plainpaste] sağ tık Formatsız Yapıştır yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[plainpaste] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[plainpaste] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist
+	rm -rf "$BUILD/_pppatch"; mkdir -p "$BUILD/_pppatch/out"
+	"$jc" --release 11 -encoding UTF-8 -cp "$jvs" -d "$BUILD/_pppatch" "$PASTERICH_SRC/PlainPastePatch.java" \
+		|| { c_warn "[plainpaste] PlainPastePatch derlenemedi; yama atlandı."; return 0; }
+	if ! "$jr" -cp "$BUILD/_pppatch:$jvs" PlainPastePatch "$JAR" "$BUILD/_pppatch/out"; then
+		c_warn "[plainpaste] kanca uygulanamadı (lafwidget sürümü değişmiş olabilir); atlandı."
+		return 0
+	fi
+	# Patcher boş çıktı üretebilir (zaten yamalı dalı) → org/ yoksa zip'e dokunma.
+	if [ -d "$BUILD/_pppatch/out/org" ]; then
+		( cd "$BUILD/_pppatch/out" && zip -q -r "$JAR" org )
+		c_ok "[plainpaste] sağ tık Formatsız Yapıştır yaması uygulandı."
+	else
+		c_ok "[plainpaste] zaten yamalı, atlandı."
+	fi
+}
+
 apply_imgresize() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$IMGRESIZE" = "1" ] || return 0
@@ -710,6 +741,7 @@ patch_jar() {
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
 	apply_pasterich "$JAR"
+	apply_plainpaste "$JAR"
 	apply_imgresize "$JAR"
 	apply_livetoggle "$JAR"
 	apply_antet "$JAR"
@@ -900,6 +932,7 @@ case "${1:-all}" in
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-rich) apply_pasterich "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	plain-paste) apply_plainpaste "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-resize) apply_imgresize "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	live-toggle) apply_livetoggle "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	antet) apply_antet "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
