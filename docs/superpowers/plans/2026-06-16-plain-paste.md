@@ -507,7 +507,7 @@ rm -rf /tmp/pp-out && mkdir -p /tmp/pp-out
 javac --release 11 -d /tmp/pp-out scripts/macos-pasterich/macospasterich/*.java tests/PlainPasteStripTest.java
 java -cp /tmp/pp-out PlainPasteStripTest
 ```
-Expected: derleme hatasız + `PlainPaseStripTest OK` (test hâlâ geçer; PlainPaste yeni eklendi).
+Expected: derleme hatasız + `PlainPasteStripTest OK` (test hâlâ geçer; PlainPaste yeni eklendi).
 
 - [ ] **Step 3: Commit**
 
