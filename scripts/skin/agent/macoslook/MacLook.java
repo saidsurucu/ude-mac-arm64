@@ -103,11 +103,23 @@ public final class MacLook {
      *  pencere genişliğine göre ortalar/kaydırır ve dar pencerede hızlı erişim
      *  ikonlarının ÜSTÜNE düşürür (UDE'nin başlığa eklediği ~100 boşlukluk
      *  sağa-itme dolgusu yalnız geniş pencerede tutar; Zulu 11 AWT'de
-     *  NSWindow.titleVisibility erişimi yok). Çözüm: gerçek başlık temizlenip
-     *  rootpane'e saklanır — SkinPatch'in TaskbarPanel.paintComponent yaması
-     *  onu ikonlarla çakışmadan çizer — yerel başlık tek boşluğa indirilir.
-     *  UDE her belge değişiminde setTitle'ı yeniler; "title" property
-     *  dinleyicisi süreci tekrarlar (boş/boşluk değerler döngüyü keser). */
+     *  NSWindow.titleVisibility erişimi yok — apple.awt.windowTitleVisible
+     *  yalnız JDK 17+).
+     *
+     *  ESKİ çözüm yerel başlığı tek boşluğa indiriyordu; ama Dock sağ-tık menüsü
+     *  / Pencere menüsü / Mission Control pencereleri NSWindow.title ile listeler
+     *  → tüm belgeler aynı boş adla görünüyordu (kullanıcı: "hangisi hangisi belli
+     *  olmuyor"). YENİ çözüm: gerçek (temiz) belge adı yerel başlık olarak KORUNUR
+     *  (Dock/menü doğru adı gösterir); başlık METNİ çizimi macos-textkeys dylib'i
+     *  (NativeDialogKeys.m) tarafından titleVisibility=NSWindowTitleHidden ile
+     *  bastırılır (titlebarAppearsTransparent pencerelerde) → çakışma yok, başlık
+     *  metni macOS tarafından çizilmez. SkinPatch'in TaskbarPanel.paintComponent
+     *  yaması temiz adı macoslook.title'dan çizmeyi sürdürür (uygulama içi görünüm
+     *  değişmez). NOT: başlık METNİNİ gizleyen native kod TEXTKEYS bayrağında;
+     *  SKIN=1 TEXTKEYS=0 (varsayılan-dışı) build'de yerel başlık metni yeniden
+     *  görünür/çakışabilir. UDE her belge değişiminde setTitle'ı yeniler; "title"
+     *  property dinleyicisi temizleyip yeniden kurar (idempotent: temiz ad tekrar
+     *  yazılınca firePropertyChange eşit değerde olay üretmez → döngü kapanır). */
     private static void hookTitle(JFrame f) {
         Component ribbon = findByClassName(f, "JRibbon");
         if (ribbon == null) return;
@@ -138,7 +150,10 @@ public final class MacLook {
             clean = clean.substring(d + 3);
         }
         f.getRootPane().putClientProperty("macoslook.title", clean);
-        f.setTitle(" ");
+        // Gerçek belge adını yerel başlık olarak KORU (Dock/Pencere menüsü onu
+        // listeler); başlık METNİ çizimi dylib'te titleVisibility=hidden ile
+        // bastırılır. clean zaten f.getTitle()'a eşitse setTitle olay üretmez.
+        if (!clean.equals(f.getTitle())) f.setTitle(clean);
         Component ribbon = findByClassName(f, "JRibbon");
         if (ribbon != null) ribbon.repaint();
         log("başlık devralındı: " + clean);

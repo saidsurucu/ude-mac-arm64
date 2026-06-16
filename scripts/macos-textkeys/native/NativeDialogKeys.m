@@ -48,7 +48,43 @@ static void udeInstallMonitor(int remaining) {
     }];
 }
 
+/*
+ * Başlık çubuğu metnini gizle (Dock pencere adları için).
+ *
+ * Sorun: SKIN agent'ı (MacLook) belge adını yerel NSWindow.title olarak KORUR
+ * ki Dock sağ-tık menüsü / Pencere menüsü / Mission Control doğru adı göstersin.
+ * Ama transparentTitleBar modunda macOS başlık METNİNİ pencere ortasına çizer ve
+ * dar pencerede hızlı erişim ikonlarının üstüne düşürür. Zulu 11 AWT'de
+ * NSWindow.titleVisibility erişimi yok (apple.awt.windowTitleVisible yalnız 17+).
+ *
+ * Çözüm: belge pencerelerinde (titlebarAppearsTransparent==YES) titleVisibility'yi
+ * NSWindowTitleHidden yap — başlık METNİ çizilmez ama window.title (Dock/menü)
+ * korunur. AWT setTitle: yalnız dizgeyi değiştirir, görünürlüğü sıfırlamaz; yine
+ * de NSWindowDidUpdateNotification ile (çizimden ÖNCE, başlık titreşimi olmadan)
+ * her güncellemede yeniden uygulanır (zaten gizliyse no-op). NSSavePanel/diyaloglar
+ * (şeffaf başlık çubuğu yok) dokunulmaz → kendi başlıklarını korur.
+ */
+static void udeHideDocTitle(NSWindow *w) {
+    if (w == nil || ![w isKindOfClass:[NSWindow class]]) return;
+    if (![w titlebarAppearsTransparent]) return;
+    if (([w styleMask] & NSWindowStyleMaskTitled) == 0) return;
+    if ([w titleVisibility] != NSWindowTitleHidden)
+        [w setTitleVisibility:NSWindowTitleHidden];
+}
+
+static void udeInstallTitleHider(void) {
+    [[NSNotificationCenter defaultCenter]
+        addObserverForName:NSWindowDidUpdateNotification
+                    object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) { udeHideDocTitle((NSWindow *)[n object]); }];
+    for (NSWindow *w in [NSApp windows]) udeHideDocTitle(w);  // ilk tarama
+}
+
 __attribute__((constructor))
 static void ude_nativedialogkeys_init(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{ udeInstallMonitor(120); });
+    dispatch_async(dispatch_get_main_queue(), ^{
+        udeInstallMonitor(120);
+        udeInstallTitleHider();
+    });
 }
