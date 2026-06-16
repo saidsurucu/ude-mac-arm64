@@ -43,8 +43,25 @@ import macospasterich.UdeDoc.TextStyle;
  */
 final class NativeInsert {
 
+    /**
+     * Düz-karakter modu için imleç öznitelik kümesi. Null değilse charAttrs(...)
+     * stil yerine bunu döndürür (Formatsız Yapıştır). EDT tek-iş-parçacıklı;
+     * insert() içinde try/finally ile set/temizlenir.
+     */
+    private static AttributeSet CURSOR_ATTRS;
+
     /** editor (hj/JTextComponent) belgesine caret'ten itibaren modeli ekler. */
     static boolean insert(Object editor, UdeDoc.Document model) {
+        return insert(editor, model, null);
+    }
+
+    /**
+     * cursorAttrs != null ise DÜZ-KARAKTER modu: tablo/imaj/liste/paragraf
+     * korunur, karakter stili cursorAttrs'a indirgenir (Formatsız Yapıştır).
+     */
+    static boolean insert(Object editor, UdeDoc.Document model, AttributeSet cursorAttrs) {
+        AttributeSet prev = CURSOR_ATTRS;
+        CURSOR_ATTRS = cursorAttrs;
         try {
             javax.swing.text.JTextComponent tc = (javax.swing.text.JTextComponent) editor;
             StyledDocument doc = (StyledDocument) tc.getDocument();
@@ -81,6 +98,8 @@ final class NativeInsert {
         } catch (Throwable t) {
             PrLog.log("NativeInsert.insert", t);
             return false;
+        } finally {
+            CURSOR_ATTRS = prev;
         }
     }
 
@@ -367,6 +386,7 @@ final class NativeInsert {
 
     // ---- karakter öznitelikleri (StyleConstants) ----
     private static AttributeSet charAttrs(TextStyle s) {
+        if (CURSOR_ATTRS != null) return CURSOR_ATTRS;   // düz-karakter modu
         SimpleAttributeSet a = new SimpleAttributeSet();
         StyleConstants.setFontFamily(a, s.fontFamily);
         StyleConstants.setFontSize(a, (int) Math.round(s.fontSize));
