@@ -26,13 +26,22 @@ public final class RichPaste {
      * ile ekler. Başarıda true; başarısızsa false → çağıran düz-metne düşer.
      */
     public static boolean insertInto(Object editor, String html) {
+        return insertInto(editor, html, null);
+    }
+
+    /**
+     * cursorAttrs != null ise DÜZ-KARAKTER modu (Formatsız Yapıştır): yapı
+     * korunur, karakter stili cursorAttrs'a indirgenir.
+     */
+    public static boolean insertInto(Object editor, String html, javax.swing.text.AttributeSet cursorAttrs) {
         try {
             if (html == null || html.isEmpty()) return false;
             PrLog.dumpHtml(html);
             UdeDoc.Document model = HtmlToUde.convert(html);
             if (model.body.isEmpty()) { PrLog.log("boş model"); return false; }
-            boolean ok = NativeInsert.insert(editor, model);
-            PrLog.log(ok ? ("insertInto ok " + model.body.size() + " blok") : "insertInto başarısız");
+            boolean ok = NativeInsert.insert(editor, model, cursorAttrs);
+            PrLog.log(ok ? ("insertInto ok " + model.body.size() + " blok"
+                    + (cursorAttrs != null ? " (düz)" : "")) : "insertInto başarısız");
             return ok;
         } catch (Throwable t) {
             PrLog.log("insertInto", t);
@@ -48,6 +57,12 @@ public final class RichPaste {
      * true; aksi halde false → çağıran düz-metne düşer.
      */
     public static boolean insertRtf(Object editor, java.awt.datatransfer.Transferable t) {
+        return insertRtf(editor, t, null);
+    }
+
+    /** cursorAttrs != null → düz-karakter modu (Formatsız Yapıştır). */
+    public static boolean insertRtf(Object editor, java.awt.datatransfer.Transferable t,
+                                    javax.swing.text.AttributeSet cursorAttrs) {
         try {
             // Birincil: pbrich (Cocoa) panoyu ekleriyle okur → imaj-GÖMÜLÜ HTML.
             String html = pasteboardRichHtml();
@@ -62,7 +77,7 @@ public final class RichPaste {
                 PrLog.log("pbrich html " + html.length());
             }
             if (html == null || html.isEmpty()) { PrLog.log("rtf→html boş"); return false; }
-            return insertInto(editor, html);
+            return insertInto(editor, html, cursorAttrs);
         } catch (Throwable e) {
             PrLog.log("insertRtf", e);
             return false;
