@@ -40,8 +40,11 @@ public final class MacTextKeys {
     /** Sol Option tuşu macOS'ta ALT olarak gelir. */
     private static final int OPT = InputEvent.ALT_DOWN_MASK;
     /**
-     * Sağ Option tuşu macOS + Java'da ALT değil ALT_GRAPH (AltGr) üretir. Aynı
-     * kısayolların sağ Option ile de çalışması için bu maskeyle de bağlanırlar.
+     * Sağ Option tuşu macOS + Java'da ALT_GRAPH (AltGr) bitini EK olarak set eder
+     * ama genel option bayrağını da bıraktığı için modifiers ALT | ALT_GRAPH olur
+     * (kaynak: sun.lwawt.macosx.NSEvent.nsToJavaModifiers). Swing InputMap TAM
+     * maske eşleşmesi istediğinden yalnız ALT_GRAPH ile bağlamak YETMEZ — sağ
+     * Option'ın gerçek imzası OPT | OPT_R'dir; putOpt bu kombinasyonu da bağlar.
      */
     private static final int OPT_R = InputEvent.ALT_GRAPH_DOWN_MASK;
     /** Command tuşu (menü kısayol maskesi macOS'ta META döner). */
@@ -169,11 +172,15 @@ public final class MacTextKeys {
     }
 
     /**
-     * Bir Option kısayolunu hem sol Option (ALT) hem sağ Option (ALT_GRAPH) ile
-     * bağlar. {@code extraMods} ek maskedir (ör. SHIFT) ya da yoksa 0.
+     * Bir Option kısayolunu sol Option (ALT), sağ Option'ın gerçek imzası
+     * (ALT | ALT_GRAPH) ve güvenlik için yalnız-ALT_GRAPH maskesiyle bağlar.
+     * Sağ Option modifiers'ı her iki biti birden taşıdığından kombinasyon
+     * bağlaması ŞARTtır (tek-bit bağlamalar Swing'in tam-maske eşleşmesinde
+     * sağ Option'a uymaz). {@code extraMods} ek maskedir (ör. SHIFT) ya da 0.
      */
     private static void putOpt(InputMap im, int keyCode, int extraMods, Object action) {
         im.put(KeyStroke.getKeyStroke(keyCode, OPT | extraMods), action);
+        im.put(KeyStroke.getKeyStroke(keyCode, OPT | OPT_R | extraMods), action);
         im.put(KeyStroke.getKeyStroke(keyCode, OPT_R | extraMods), action);
     }
 
