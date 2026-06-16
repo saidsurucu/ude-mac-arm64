@@ -11,15 +11,17 @@ import java.io.FileOutputStream;
 /**
  * Sağ tık menüsüne "Formatsız Yapıştır" ekler (build-zamanı bytecode yaması).
  *
- * Editörün sağ tık menüsü UDE'den DEĞİL, Substance/lafwidget'ten gelir:
- * org.jvnet.lafwidget.text.EditContextMenuWidget$1.handleMouseEvent bir JPopupMenu
- * kurar (Kes/Kopyala/Yapıştır/——/Sil/Tümünü Seç) ve JPopupMenu.show ile gösterir.
- * Bu sınıf OBFUSCATE DEĞİL → isimle hedeflenir.
+ * Editörün sağ tık menüsü UDE'NİN KENDİ menüsüdür (lafwidget DEĞİL):
+ * tr...editor.common.text.fK (MouseListener, editör fi'ye takılı) popup'ı
+ * gui.dx.getPopupMenu() ile kurar ve fK.a(MouseEvent) içinde
+ * popup.show(fi, x, y) ile gösterir. Menü: Kes/Kopyala/Yapıştır/——/Sil/Tümünü Seç
+ * (Windows kökenli Ctrl hızlandırıcılarla). Sınıf/metot OBFUSCATE → metot ADIYLA
+ * DEĞİL, JPopupMenu.show ÇAĞRI YERİYLE hedeflenir (sürüm değişimine dayanıklı).
  *
- * Yama: handleMouseEvent içindeki JPopupMenu.show(comp,x,y) çağrısı, önce
+ * Yama: fK içindeki JPopupMenu.show(comp,x,y) çağrısı, önce
  * macospasterich.PlainPaste.addMenuItem(popup, comp) çağrılacak şekilde sarılır
- * ($0=popup, $1=comp). addMenuItem öğeyi indeks 3'e (Yapıştır'dan hemen sonra,
- * ayraçtan önce) ekler. Menü yapısı aynı bytecode'da sabit olduğundan güvenli.
+ * ($0=popup, $1=editör). addMenuItem öğeyi "Yapıştır"ın ardına ekler + Ctrl
+ * hızlandırıcıları ⌘'ya çevirir (idempotent).
  *
  * ÖN KOŞUL: macospasterich.PlainPaste sınıfı ÖNCE jar'a enjekte edilmiş olmalı
  * (apply_pasterich → apply_plainpaste sırası).
@@ -38,32 +40,42 @@ public class PlainPastePatch {
         ClassPool pool = ClassPool.getDefault();
         pool.insertClassPath(jar);
 
-        CtClass inner = pool.get("org.jvnet.lafwidget.text.EditContextMenuWidget$1");
-        CtMethod hm = inner.getDeclaredMethod("handleMouseEvent");
+        CtClass fk = pool.get("tr.com.havelsan.uyap.system.editor.common.text.fK");
 
-        // İdempotans: zaten PlainPaste.addMenuItem çağrısı varsa atla.
+        // İdempotans: herhangi bir metotta PlainPaste.addMenuItem çağrısı varsa atla.
         final boolean[] already = { false };
-        hm.instrument(new ExprEditor() {
-            public void edit(MethodCall mc) {
-                if (mc.getClassName().equals("macospasterich.PlainPaste")
-                        && mc.getMethodName().equals("addMenuItem")) already[0] = true;
-            }
-        });
+        for (CtMethod m : fk.getDeclaredMethods()) {
+            m.instrument(new ExprEditor() {
+                public void edit(MethodCall mc) {
+                    if (mc.getClassName().equals("macospasterich.PlainPaste")
+                            && mc.getMethodName().equals("addMenuItem")) already[0] = true;
+                }
+            });
+        }
         if (already[0]) {
             System.out.println("[PlainPastePatch] zaten yamalı, atlandı.");
             return;
         }
 
-        hm.instrument(new ExprEditor() {
-            public void edit(MethodCall mc) throws CannotCompileException {
-                if (mc.getClassName().equals("javax.swing.JPopupMenu")
-                        && mc.getMethodName().equals("show")) {
-                    mc.replace("{ macospasterich.PlainPaste.addMenuItem($0, $1); $proceed($$); }");
+        // JPopupMenu.show çağrı yerini sar (hangi metotta olursa olsun).
+        final boolean[] wrapped = { false };
+        for (CtMethod m : fk.getDeclaredMethods()) {
+            m.instrument(new ExprEditor() {
+                public void edit(MethodCall mc) throws CannotCompileException {
+                    if (mc.getClassName().equals("javax.swing.JPopupMenu")
+                            && mc.getMethodName().equals("show")) {
+                        mc.replace("{ macospasterich.PlainPaste.addMenuItem($0, $1); $proceed($$); }");
+                        wrapped[0] = true;
+                    }
                 }
-            }
-        });
+            });
+        }
+        if (!wrapped[0]) {
+            System.err.println("[PlainPastePatch] fK içinde JPopupMenu.show bulunamadı; UDE sürümü değişmiş olabilir.");
+            System.exit(3);
+        }
 
-        writeClass(inner, outDir);
+        writeClass(fk, outDir);
         System.out.println("[PlainPastePatch] sağ tık 'Formatsız Yapıştır' öğesi enjekte edildi.");
     }
 

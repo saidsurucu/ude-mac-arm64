@@ -560,9 +560,9 @@ apply_plainpaste() {  # $1=JAR — patch_jar içinden çağrılır (apply_paster
 		c_warn "[plainpaste] kanca uygulanamadı (lafwidget sürümü değişmiş olabilir); atlandı."
 		return 0
 	fi
-	# Patcher boş çıktı üretebilir (zaten yamalı dalı) → org/ yoksa zip'e dokunma.
-	if [ -d "$BUILD/_pppatch/out/org" ]; then
-		( cd "$BUILD/_pppatch/out" && zip -q -r "$JAR" org )
+	# Patcher boş çıktı üretebilir (zaten yamalı dalı) → tr/ yoksa zip'e dokunma.
+	if [ -d "$BUILD/_pppatch/out/tr" ]; then
+		( cd "$BUILD/_pppatch/out" && zip -q -r "$JAR" tr )
 		c_ok "[plainpaste] sağ tık Formatsız Yapıştır yaması uygulandı."
 	else
 		c_ok "[plainpaste] zaten yamalı, atlandı."
