@@ -44,34 +44,43 @@ ClassLoader → erişim sorunsuz; agy #3 ile doğrulandı).
 **`NativeInsert` düz-karakter modu.** `charAttrs(TextStyle)` çağrı sırasında bir
 imleç-öznitelik kümesi etkinse, stil yerine onu döndürür.
 
+- Mevcut iki-argümanlı `insert(Object editor, UdeDoc.Document model)` korunur ve
+  `insert(editor, model, null)`'a yönlendirilir (geriye uyumlu; agy-2 #1 doğruladı,
+  L47'de mevcut).
 - Yeni aşırı yükleme: `insert(Object editor, UdeDoc.Document model, AttributeSet cursorAttrs)`.
 - `cursorAttrs != null` ise düz-karakter modu. EDT tek-iş-parçacıklı; mod tek bir
   `static AttributeSet CURSOR_ATTRS` ile taşınır, `insert()` içinde
   **`try { CURSOR_ATTRS = cursorAttrs; … } finally { CURSOR_ATTRS = null; }`**
   (agy #1: try/finally şart).
 - `charAttrs(TextStyle s)`: `if (CURSOR_ATTRS != null) return CURSOR_ATTRS;` aksi
-  hâlde mevcut davranış (stilden üret).
+  hâlde mevcut davranış (stilden üret). Paylaşılan set güvenli (Swing `insertString`
+  öznitelikleri iç element yapısına kopyalar); yine de PlainPaste, set'i
+  `new SimpleAttributeSet(...)` ile izole kopya olarak verir (agy-2 #2).
 - `insertTable`/`fillCell`/`insertImage`/`paraAttrs` **değişmez** → tablo, imaj,
   liste, hizalama, girinti aynen korunur (agy #1 doğruladı).
-- Mevcut iki-argümanlı `insert(editor, model)` zengin yol için aynen kalır
-  (`insert(editor, model, null)`'a yönlendirilebilir).
 
 **Yeni `macospasterich.PlainPaste`.**
 
 `static boolean paste(javax.swing.text.JTextComponent editor)`:
 
 1. Düzenlenebilir/etkin değilse `false`.
-2. **İmleç stilini çöz (agy #2 — FontFamily fallback):**
-   - Kit `StyledEditorKit` ise `getInputAttributes()` kopyası.
-   - Çözülen kümede `StyleConstants.FontFamily` yoksa sırayla:
-     `editor.getCharacterAttributes()` → yine yoksa `DEFAULT_BREAK` (TNR 12)
-     bir alt katman olarak serilir (Swing'in "Monospaced"a düşmesi engellenir).
+2. **İmleç stilini çöz (agy #2 + agy-2 #3 — FontFamily fallback):**
+   - Kit `StyledEditorKit` ise `getInputAttributes()` kopyası (`new SimpleAttributeSet(...)`).
+   - Çözülen kümede `StyleConstants.FontFamily` yoksa sırayla `setResolveParent`
+     zinciriyle alt katman: belge `StyledDocument` ise
+     `((StyledDocument) doc).getCharacterElement(caret).getAttributes()` → yine
+     yoksa `DEFAULT_BREAK` (TNR 12). **NOT:** `JTextComponent.getCharacterAttributes()`
+     YOKTUR (o JTextPane'e özgü); `getCharacterElement(...).getAttributes()` kullanılır
+     (agy-2 #3 düzeltmesi).
 3. **Pano:**
    - HTML flavor varsa → `HtmlToUde` ile model → `NativeInsert.insert(editor, model, cursorAttrs)`.
-   - RTF flavor varsa → `textutil -convert html` → HTML → aynı yol
-     (`RichPaste.insertRtf` mantığı yeniden kullanılır).
-   - Yalnız `stringFlavor` → seçim varsa `AbstractDocument.replace(start,len,text,cursorAttrs)`,
-     yoksa `insertString(caret, text, cursorAttrs)`. `moveDot` YASAK (CLAUDE.md
+   - RTF flavor varsa → `RichPaste.extractRtf(t)` → `RichPaste.rtfToHtml(...)`
+     (textutil) → `HtmlToUde` → `NativeInsert.insert(..., cursorAttrs)`. Bu iki
+     yardımcı şu an `private static`; **paket-görünür (default) yapılır** ki aynı
+     paketteki PlainPaste düz-karakter modunda kullansın (agy-2 #4).
+   - Yalnız `stringFlavor` → seçim varsa `doc.remove(start, len)` ardından
+     `doc.insertString(start, text, cursorAttrs)` (`Document` arayüzü; cast YOK,
+     agy-2 #5). `moveDot`/`AbstractDocument.replace` cast'ı YASAK (CLAUDE.md
      TextReplace/NPE dersi). `\n`'ler doğal paragraf kırması olur.
 4. **Savunmacı (agy #4):** Belge `StyledDocument` değilse cast yapılmaz; düz
    `insertString` ile eklenir (doğrudan çağrı güvenli).
@@ -107,13 +116,23 @@ ediyor → `PlainPaste.java` otomatik dahil.
 
 ## agy adversaryal incelemesi (özet)
 
+Tur 1 (tasarım):
 - #1 charAttrs + tablo hücreleri: **OK** (try/finally guard önerisi katıldı).
-- #2 FontFamily fallback: **KUSUR** → `getCharacterAttributes()` → `DEFAULT_BREAK`
+- #2 FontFamily fallback: **KUSUR** → imleç karakter elementi → `DEFAULT_BREAK`
   katmanı eklendi.
 - #3 reflection/classloader: **OK** (`Class.forName`).
 - #4 editör-dışı ⌘⇧V cast hatası: **KUSUR** → `performLocal` `tc.paste()` + PlainPaste
   savunmacı cast.
 - #5 daha basit alternatif: **yok** (düz metin okumak tablo/imaj/listeyi yok eder).
+
+Tur 2 (yazılı spec, gerçek koda karşı):
+- #1 iki-argümanlı `insert` (L47) → üç-argümanlıya yönlendirme: **OK**.
+- #2 paylaşılan `CURSOR_ATTRS`: **OK** + PlainPaste `new SimpleAttributeSet` izolasyonu.
+- #3 FontFamily fallback: **KUSUR** → `JTextComponent.getCharacterAttributes()` YOK;
+  `((StyledDocument)doc).getCharacterElement(caret).getAttributes()` ile düzeltildi.
+- #4 `extractRtf`/`rtfToHtml` (L112/L132) `private`: **KUSUR** → paket-görünür yapılacak.
+- #5 `stringFlavor` ekleme: **KUSUR** → `AbstractDocument.replace` cast'ı yerine
+  `doc.remove` + `doc.insertString` (Document arayüzü).
 
 ## Sınırlar / riskler
 
