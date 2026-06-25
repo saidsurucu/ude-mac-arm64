@@ -60,6 +60,12 @@ final class NativeInsert {
         StyleConstants.LineSpacing, StyleConstants.TabSet
     };
 
+    /** Liste paragrafında imleçten alınan anahtarlar (girinti/tabset DEĞİL → kaynak). */
+    private static final Object[] LIST_CURSOR_KEYS = {
+        StyleConstants.Alignment, StyleConstants.SpaceAbove,
+        StyleConstants.SpaceBelow, StyleConstants.LineSpacing
+    };
+
     /** editor (hj/JTextComponent) belgesine caret'ten itibaren modeli ekler. */
     static boolean insert(Object editor, UdeDoc.Document model) {
         return insert(editor, model, null);
@@ -376,16 +382,26 @@ final class NativeInsert {
      */
     private static SimpleAttributeSet paraAttrsPlain(Paragraph p) {
         SimpleAttributeSet pa = new SimpleAttributeSet();
-        if (CURSOR_PARA_ATTRS != null) pa.addAttributes(CURSOR_PARA_ATTRS);
-        if (p.list != null) {
-            SimpleAttributeSet src = paraAttrs(p);   // kaynak (liste işaretleri dahil)
-            copyIfPresent(src, pa, "Bulleted");
-            copyIfPresent(src, pa, "Numbered");
-            copyIfPresent(src, pa, "BulletType");
-            copyIfPresent(src, pa, "NumberType");
-            copyIfPresent(src, pa, "ListLevel");
-            copyIfPresent(src, pa, "ListId");
+        AttributeSet cur = CURSOR_PARA_ATTRS;
+        if (p.list == null) {
+            if (cur != null) pa.addAttributes(cur);   // 8 anahtarın hepsi imleçten
+            return pa;
         }
+        // Liste: hizalama/aralık imleçten, girinti/tabset + işaretler KAYNAKTAN.
+        if (cur != null) {
+            for (Object key : LIST_CURSOR_KEYS) copyIfPresent(cur, pa, key);
+        }
+        SimpleAttributeSet src = paraAttrs(p);
+        copyIfPresent(src, pa, StyleConstants.LeftIndent);
+        copyIfPresent(src, pa, StyleConstants.RightIndent);
+        copyIfPresent(src, pa, StyleConstants.FirstLineIndent);
+        copyIfPresent(src, pa, StyleConstants.TabSet);
+        copyIfPresent(src, pa, "Bulleted");
+        copyIfPresent(src, pa, "Numbered");
+        copyIfPresent(src, pa, "BulletType");
+        copyIfPresent(src, pa, "NumberType");
+        copyIfPresent(src, pa, "ListLevel");
+        copyIfPresent(src, pa, "ListId");
         return pa;
     }
 

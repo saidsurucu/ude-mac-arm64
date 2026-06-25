@@ -17,6 +17,7 @@ public class PlainPasteParaFormatTest {
     public static void main(String[] a) throws Exception {
         checkBodyAdoptsCursorFormat();
         checkRichPasteRegression();
+        checkListKeepsSourceIndent();
         System.out.println("PlainPasteParaFormatTest OK");
     }
 
@@ -84,5 +85,46 @@ public class PlainPasteParaFormatTest {
                         + txt.trim() + "'");
         }
         if (!sawBody) throw new AssertionError("rich: hiç gövde paragrafı eklenmedi");
+    }
+
+    /**
+     * Liste paragrafı: işaret + KAYNAK girintisi korunur (imleç sıfır/farklı
+     * girintisi EZMEZ — hanging indent); hizalama imleçten gelir.
+     */
+    static void checkListKeepsSourceIndent() throws Exception {
+        JTextPane pane = new JTextPane();
+        StyledDocument doc = (StyledDocument) pane.getDocument();
+        // İmleç paragrafı: JUSTIFIED + BÜYÜK sol girinti (listeye SIZMAMALI).
+        SimpleAttributeSet cp = new SimpleAttributeSet();
+        StyleConstants.setAlignment(cp, StyleConstants.ALIGN_JUSTIFIED);
+        StyleConstants.setLeftIndent(cp, 90f);
+        doc.setParagraphAttributes(0, 1, cp, false);
+        pane.setCaretPosition(0);
+
+        SimpleAttributeSet cursor = new SimpleAttributeSet();
+        StyleConstants.setFontFamily(cursor, "Calibri");
+        StyleConstants.setFontSize(cursor, 16);
+
+        // Kaynak liste: girinti taşımaz (UDE list indent ListLevel'dan; LeftIndent=0).
+        String html = "<ul><li>Madde bir</li></ul>";
+        if (!macospasterich.RichPaste.insertInto(pane, html, cursor))
+            throw new AssertionError("insertInto(plain list) false");
+
+        Element root = doc.getDefaultRootElement();
+        boolean sawList = false;
+        for (int p = 0; p < root.getElementCount(); p++) {
+            AttributeSet at = root.getElement(p).getAttributes();
+            if (at.getAttribute("Bulleted") == null && at.getAttribute("Numbered") == null) continue;
+            sawList = true;
+            // İmlecin 90f girintisi listeye sızMAMALI (kaynak 0).
+            if (StyleConstants.getLeftIndent(at) != 0f)
+                throw new AssertionError("liste girintisi imleçten sızdı (hanging indent bozuldu): "
+                        + StyleConstants.getLeftIndent(at));
+            // Hizalama imleçten (JUSTIFIED) gelmeli.
+            if (StyleConstants.getAlignment(at) != StyleConstants.ALIGN_JUSTIFIED)
+                throw new AssertionError("liste hizalaması imleçten alınmadı: "
+                        + StyleConstants.getAlignment(at));
+        }
+        if (!sawList) throw new AssertionError("liste paragrafı bulunamadı");
     }
 }
