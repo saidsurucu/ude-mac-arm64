@@ -363,7 +363,8 @@ final class NativeInsert {
             Element pe = doc.getParagraphElement(offset);
             AttributeSet as = pe.getAttributes();
             for (Object key : PARA_FORMAT_KEYS) {
-                if (as.isDefined(key)) out.addAttribute(key, as.getAttribute(key));
+                Object v = as.getAttribute(key);   // resolver zincirini izler (miras dahil)
+                if (v != null) out.addAttribute(key, v);
             }
         } catch (Throwable ignore) { }
         return out;

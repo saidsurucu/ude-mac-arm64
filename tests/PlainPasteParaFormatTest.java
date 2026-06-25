@@ -18,6 +18,7 @@ public class PlainPasteParaFormatTest {
         checkBodyAdoptsCursorFormat();
         checkRichPasteRegression();
         checkListKeepsSourceIndent();
+        checkInheritedCursorAlignment();
         System.out.println("PlainPasteParaFormatTest OK");
     }
 
@@ -126,5 +127,42 @@ public class PlainPasteParaFormatTest {
                         + StyleConstants.getAlignment(at));
         }
         if (!sawList) throw new AssertionError("liste paragrafı bulunamadı");
+    }
+
+    /**
+     * İmleç hizalaması LOKAL değil bir parent STİLDEN miras geliyorken bile
+     * snapshot onu yakalamalı (getAttribute vs isDefined regresyonu).
+     */
+    static void checkInheritedCursorAlignment() throws Exception {
+        JTextPane pane = new JTextPane();
+        StyledDocument doc = (StyledDocument) pane.getDocument();
+        // JUSTIFIED'ı bir mantıksal STİLE koy, para0'ın resolve-parent'ı yap
+        // (lokal Alignment attr'ı YOK → isDefined false, getAttribute resolve eder).
+        javax.swing.text.Style just = pane.addStyle("just", null);
+        StyleConstants.setAlignment(just, StyleConstants.ALIGN_JUSTIFIED);
+        doc.setLogicalStyle(0, just);
+        pane.setCaretPosition(0);
+
+        SimpleAttributeSet cursor = new SimpleAttributeSet();
+        StyleConstants.setFontFamily(cursor, "Calibri");
+        StyleConstants.setFontSize(cursor, 16);
+
+        if (!macospasterich.RichPaste.insertInto(pane,
+                "<p style='text-align:right'>Miras testi</p>", cursor))
+            throw new AssertionError("insertInto(plain inherited) false");
+
+        Element root = doc.getDefaultRootElement();
+        boolean sawBody = false;
+        for (int p = 0; p < root.getElementCount(); p++) {
+            Element para = root.getElement(p);
+            String txt = doc.getText(para.getStartOffset(),
+                    Math.min(para.getEndOffset(), doc.getLength()) - para.getStartOffset());
+            if (txt.trim().isEmpty()) continue;
+            sawBody = true;
+            if (StyleConstants.getAlignment(para.getAttributes()) != StyleConstants.ALIGN_JUSTIFIED)
+                throw new AssertionError("mirastan gelen hizalama yakalanmadı: align="
+                        + StyleConstants.getAlignment(para.getAttributes()));
+        }
+        if (!sawBody) throw new AssertionError("miras: hiç gövde paragrafı eklenmedi");
     }
 }
