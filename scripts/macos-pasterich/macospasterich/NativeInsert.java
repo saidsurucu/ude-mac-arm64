@@ -50,6 +50,16 @@ final class NativeInsert {
      */
     private static AttributeSet CURSOR_ATTRS;
 
+    /** Düz modda imleç paragraf biçimi (beyaz-liste). null = normal rich paste. */
+    private static AttributeSet CURSOR_PARA_ATTRS;
+
+    /** İmleçten kopyalanacak paragraf-düzen anahtarları (char/yapısal sızıntı yok). */
+    private static final Object[] PARA_FORMAT_KEYS = {
+        StyleConstants.Alignment, StyleConstants.LeftIndent, StyleConstants.RightIndent,
+        StyleConstants.FirstLineIndent, StyleConstants.SpaceAbove, StyleConstants.SpaceBelow,
+        StyleConstants.LineSpacing, StyleConstants.TabSet
+    };
+
     /** editor (hj/JTextComponent) belgesine caret'ten itibaren modeli ekler. */
     static boolean insert(Object editor, UdeDoc.Document model) {
         return insert(editor, model, null);
@@ -61,11 +71,15 @@ final class NativeInsert {
      */
     static boolean insert(Object editor, UdeDoc.Document model, AttributeSet cursorAttrs) {
         AttributeSet prev = CURSOR_ATTRS;
+        AttributeSet prevPara = CURSOR_PARA_ATTRS;
         CURSOR_ATTRS = cursorAttrs;
         try {
             javax.swing.text.JTextComponent tc = (javax.swing.text.JTextComponent) editor;
             StyledDocument doc = (StyledDocument) tc.getDocument();
             int start = tc.getCaretPosition();
+            // Düz mod: imlecin paragraf biçimini ekleme ÖNCESİ (tablo sentinel'inden
+            // de önce) yakala — metnin gerçekten ineceği paragraftan okunmalı.
+            if (cursorAttrs != null) CURSOR_PARA_ATTRS = snapshotParaFormat(doc, start);
             List<Block> body = trimEmpties(model.body);
             // Tablo belgenin İLK öğesi olarak eklenirse (offset 0'da, üstünde
             // paragraf yokken) UDE'nin tablo-silme primitifi (DocumentEx.f /
@@ -100,6 +114,7 @@ final class NativeInsert {
             return false;
         } finally {
             CURSOR_ATTRS = prev;
+            CURSOR_PARA_ATTRS = prevPara;
         }
     }
 
@@ -174,7 +189,8 @@ final class NativeInsert {
         // özniteliklerini MİRAS alarak kurar; replace=false yalnız EKLER → bullet bir
         // sonraki (numara/düz) paragrafa sızar (numara yerine bullet, "bitti." de
         // madde işaretli çıkar). TRUE ile her paragrafın işareti tam kontrol edilir.
-        doc.setParagraphAttributes(paraStart, pos - paraStart, paraAttrs(para), true);
+        AttributeSet pAttrs = (CURSOR_PARA_ATTRS != null) ? paraAttrsPlain(para) : paraAttrs(para);
+        doc.setParagraphAttributes(paraStart, pos - paraStart, pAttrs, true);
         return pos;
     }
 
@@ -331,6 +347,48 @@ final class NativeInsert {
     }
 
     /** Paragraf öznitelikleri: hizalama + girintiler + aralık + liste işareti. */
+    /**
+     * İmlecin paragraf biçimini beyaz-liste ile yakalar. Task 1: yalnız LOKAL
+     * (isDefined) attr. Task 3 mirası (getAttribute) ekler.
+     */
+    private static AttributeSet snapshotParaFormat(StyledDocument doc, int offset) {
+        SimpleAttributeSet out = new SimpleAttributeSet();
+        try {
+            Element pe = doc.getParagraphElement(offset);
+            AttributeSet as = pe.getAttributes();
+            for (Object key : PARA_FORMAT_KEYS) {
+                if (as.isDefined(key)) out.addAttribute(key, as.getAttribute(key));
+            }
+        } catch (Throwable ignore) { }
+        return out;
+    }
+
+    /** src'de varsa anahtarı dst'ye kopyalar. */
+    private static void copyIfPresent(AttributeSet src, MutableAttributeSet dst, Object key) {
+        Object v = src.getAttribute(key);
+        if (v != null) dst.addAttribute(key, v);
+    }
+
+    /**
+     * Düz mod paragraf öznitelikleri. Task 1: TÜM paragraflara imleç biçimi
+     * (CURSOR_PARA_ATTRS) + liste paragraflarında kaynak liste işaretleri.
+     * (Task 2 liste girintisini kaynaktan korur — hanging indent.)
+     */
+    private static SimpleAttributeSet paraAttrsPlain(Paragraph p) {
+        SimpleAttributeSet pa = new SimpleAttributeSet();
+        if (CURSOR_PARA_ATTRS != null) pa.addAttributes(CURSOR_PARA_ATTRS);
+        if (p.list != null) {
+            SimpleAttributeSet src = paraAttrs(p);   // kaynak (liste işaretleri dahil)
+            copyIfPresent(src, pa, "Bulleted");
+            copyIfPresent(src, pa, "Numbered");
+            copyIfPresent(src, pa, "BulletType");
+            copyIfPresent(src, pa, "NumberType");
+            copyIfPresent(src, pa, "ListLevel");
+            copyIfPresent(src, pa, "ListId");
+        }
+        return pa;
+    }
+
     private static SimpleAttributeSet paraAttrs(Paragraph p) {
         SimpleAttributeSet pa = new SimpleAttributeSet();
         StyleConstants.setAlignment(pa, p.alignment);
