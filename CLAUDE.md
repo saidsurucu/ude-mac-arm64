@@ -64,6 +64,27 @@ diyaloğu birebir üretir. Not: uygulamaya CLI argümanı olarak .udf vermek
 açılışı splash'ta bırakır (UDE dosya argümanı işlemez) — test için dosyayı
 uygulama İÇİNDEN aç.
 
+### Klasik görünüm menü çubuğu trafik ışıklarıyla çakışıyordu (2026-06)
+
+"Klasik görünüme geç" (Görünüm sekmesi onay kutusu; tercih KALICI → sonraki
+açılışta da klasik) AÇIKKEN UDE şeridin ÜSTÜNDE klasik in-window `JMenuBar`'ı
+(`…gui.a.x`, mnemonikli Dosya/Giriş/…) gösterir. `fullWindowContent` ile bu çubuk
+da trafik ışıklarının altına düşer ama TRAFFIC_INSET yalnız JRibbon'a uygulanıyordu
+→ "Dosya" ışıkların ALTINA biner ("sol üst köşede menüler iç içe" + "boşluk"
+şikâyeti). Ribbon modunda menü çubuğu GİZLİ (`getJMenuBar` 0-yükseklik döner ama
+menü öğeleri yine de yatay yerleşir); klasik modda 23px görünür (`bounds=[0,0,w,23]`,
+UDE'nin null-layout JLayeredPane'inde mutlak konum). **Menü çubuğu örneği iki
+görünümde de AYNIDIR** (ribbon modunda getJMenuBar null DEĞİL, 0-yükseklik → çubuk
+silinmez, gizlenir; iki probe ile doğrulandı) → açılışta bir kez içlik uygulamak
+klasik moda geçişte de geçerli kalır. **Çözüm:** MacLook `insetMenuBar` — `f.getJMenuBar()`
+bordürüne `EmptyBorder(0,72,0,0)` (idempotans: client property `macoslook.mbinset`).
+Sol içlik menü öğelerini çubuğun KENDİ düzeninde sağa kaydırır (Dosya x=0→x=72);
+mutlak bounds değişmez. Teşhis: dynamic-attach probe (menü bar 0-yükseklik vs 23px
+fark; FixProbe ile EmptyBorder canlı uygulayıp `screencapture -l<winID>` ile "Dosya"
+ışıkları temizliyor doğrulandı — `revalidate` ASENKRON olduğundan içlik sonrası
+`doLayout()` ile senkron okuma şart). Ribbon modunda 0-yükseklik çubuğa içlik
+görünmez (yükseklik artmaz) → yan etki yok.
+
 ### Başlık çubuğu yazısı (2026-06)
 
 `transparentTitleBar` modunda macOS başlık METNİNİ yine de çizer ve pencere

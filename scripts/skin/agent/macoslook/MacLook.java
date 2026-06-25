@@ -91,12 +91,40 @@ public final class MacLook {
                 javax.swing.BorderFactory.createEmptyBorder(0, TRAFFIC_INSET, 0, 0),
                 r.getBorder()));
             log("ribbon insetlendi");
+            insetMenuBar(f);
         }
         java.awt.Color bg = UIManager.getColor("Panel.background");
         if (bg != null) f.setBackground(bg);
         root.revalidate();
         f.repaint();
         log("titlebar bütünleşti: " + f.getTitle());
+    }
+
+    /** "Klasik görünüme geç" açıkken UDE şeritin üstüne klasik in-window
+     *  JMenuBar'ı (Dosya/Giriş/… mnemonikli) gösterir. fullWindowContent ile bu
+     *  çubuk da trafik ışıklarının altına düşer → "Dosya" ışıkların ALTINA biner
+     *  (kullanıcının "sol üst köşede menüler iç içe" şikâyeti). Ribbon gibi menü
+     *  çubuğunu da trafik-ışığı sol içliğiyle iteriz. Menü çubuğu örneği iki
+     *  görünümde de aynıdır (ribbon modunda 0-yükseklik gizli, klasik modda
+     *  23px görünür; her iki probe ile doğrulandı) → açılışta içlik uygulamak
+     *  klasik moda geçişte de geçerli kalır. Sol içlik bordürü menü öğelerini
+     *  çubuğun KENDİ düzeninde sağa kaydırır; çubuğun mutlak bounds'u (UDE'nin
+     *  null-layout JLayeredPane'i [0,0,w,23]) değişmez. İçlik canlı dynamic-attach
+     *  ile doğrulandı: "Dosya" x=0 → x=72, ışıkları temizledi. Idempotans:
+     *  client property guard. */
+    private static void insetMenuBar(JFrame f) {
+        javax.swing.JMenuBar mb = f.getJMenuBar();
+        if (mb == null) { log("menü çubuğu yok"); return; }
+        if (Boolean.TRUE.equals(mb.getClientProperty("macoslook.mbinset"))) return;
+        mb.putClientProperty("macoslook.mbinset", Boolean.TRUE);
+        javax.swing.border.Border ob = mb.getBorder();
+        javax.swing.border.Border inset =
+            javax.swing.BorderFactory.createEmptyBorder(0, TRAFFIC_INSET, 0, 0);
+        mb.setBorder(ob == null ? inset
+            : javax.swing.BorderFactory.createCompoundBorder(inset, ob));
+        mb.revalidate();
+        mb.repaint();
+        log("menü çubuğu insetlendi");
     }
 
     /** Yerel macOS başlık METNİ şeffaf başlık çubuğunda da çizilir; macOS onu
