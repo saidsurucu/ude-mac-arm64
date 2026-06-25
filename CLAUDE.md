@@ -599,6 +599,15 @@ boşluğu parantez DIŞINDA ara (`v.replaceAll("\\([^)]*\\)","")` sonra boşluk 
   toplayıp sonda `tc.setCaretPosition(start+delta)` yapar (resimli+tablolu yapıştırmada
   dynamic-attach ile doğrulandı: caret==len). Tablolar artık Backspace ile silinir
   (bkz. "Backspace ile tablo silme") — yapıştırma baştaki tabloya üst paragraf ekler.
+- **Üzerine yapıştırma seçimi siler (2026-06-25):** `NativeInsert.insert` ekleme
+  ÖNCESİ aktif seçimi `doc.remove(selS, selE-selS)` ile kaldırır, `start=selS` yapar
+  (yoksa `getCaretPosition()`). Eskiden seçim bırakılıp metin imleç ucuna eklenirdi
+  ("var olanı silmiyor, üstüne ekliyor"). Düz-metin yedeği (`insertPlainString`)
+  zaten bu deseni kullanıyordu; rich/RTF/HTML yolu (⌘V harici + ⌘⇧V formatsız) artık
+  ortak `NativeInsert`'ten kapsanır. `doc.remove` güvenli (moveDot YOK); seçim sonrası
+  `snapshotParaFormat(doc,start)` ve offset-0 tablo-sentinel doğru paragraftan okur;
+  `doc.remove` patlarsa catch→false→düz-metin yedeği seçimi yine siler. Test:
+  `tests/RichPasteReplaceSelectionTest.java`. (codex incelemesi: ready.)
 - Build: `apply_pasterich` tüm `macospasterich/*.java` derler (app-cp'siz —
   NativeInsert reflection kullanır) + jar'a enjekte + `PasteRichPatch` çalıştırır
   (gerçek fonksiyon `build.sh paste-rich` ile uçtan uca doğrulandı). Teşhis:

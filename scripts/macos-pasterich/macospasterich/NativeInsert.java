@@ -82,7 +82,21 @@ final class NativeInsert {
         try {
             javax.swing.text.JTextComponent tc = (javax.swing.text.JTextComponent) editor;
             StyledDocument doc = (StyledDocument) tc.getDocument();
-            int start = tc.getCaretPosition();
+            // Seçili metnin ÜZERİNE yapıştırma = seçimi DEĞİŞTİR (Word/standart
+            // editör semantiği). Aksi halde getCaretPosition() seçim ucunda kalır
+            // → metin seçimin yanına EKLENİR (kullanıcının "var olanı silmiyor"
+            // şikâyeti). doc.remove güvenli (insertPlainString/TextReplace deseni;
+            // moveDot YOK). start seçim başı olur — snapshotParaFormat/offset-0
+            // tablo kontrolü doğru paragraftan okunur.
+            int selS = Math.min(tc.getSelectionStart(), tc.getSelectionEnd());
+            int selE = Math.max(tc.getSelectionStart(), tc.getSelectionEnd());
+            int start;
+            if (selE > selS) {
+                doc.remove(selS, selE - selS);
+                start = selS;
+            } else {
+                start = tc.getCaretPosition();
+            }
             // Düz mod: imlecin paragraf biçimini ekleme ÖNCESİ (tablo sentinel'inden
             // de önce) yakala — metnin gerçekten ineceği paragraftan okunmalı.
             if (cursorAttrs != null) CURSOR_PARA_ATTRS = snapshotParaFormat(doc, start);
