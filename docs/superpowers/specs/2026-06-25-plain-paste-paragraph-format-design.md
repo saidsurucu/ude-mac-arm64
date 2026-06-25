@@ -46,9 +46,23 @@ private static AttributeSet CURSOR_PARA_ATTRS;   // düz modda gövde paragraf t
 ```
 
 `insert(editor, model, cursorAttrs)` içinde, `cursorAttrs != null` iken,
-**herhangi bir ekleme yapılmadan ÖNCE** imlecin paragraf biçimi yakalanır ve
-try/finally ile set/temizlenir (EDT tek iş parçacıklı, `CURSOR_ATTRS` ile aynı
-yaşam döngüsü).
+**herhangi bir ekleme yapılmadan ÖNCE** imlecin paragraf biçimi yakalanır.
+`CURSOR_ATTRS` ile **aynı `try/finally`** içinde set edilir ve `finally`'de
+**önceki değere restore edilir** (`prev` deseni; iç içe/yarıda kalan çağrıda
+sızmasın — agy bulgusu). `start` `try` içinde (`getCaretPosition()`, mevcut
+satır 68) hesaplandığı için snapshot da orada, sentinel'den önce alınır:
+
+```java
+AttributeSet prevChar = CURSOR_ATTRS, prevPara = CURSOR_PARA_ATTRS;
+CURSOR_ATTRS = cursorAttrs;
+try {
+    JTextComponent tc = (JTextComponent) editor;
+    StyledDocument doc = (StyledDocument) tc.getDocument();
+    int start = tc.getCaretPosition();                       // mevcut satır 68
+    if (cursorAttrs != null) CURSOR_PARA_ATTRS = snapshotParaFormat(doc, start);
+    // ... start==0 tablo sentinel (satır 77-80) ve ekleme bundan SONRA ...
+} finally { CURSOR_ATTRS = prevChar; CURSOR_PARA_ATTRS = prevPara; }
+```
 
 **Yakalama noktası (KRİTİK — agy + codex ortak bulgusu):**
 - Snapshot, `insert()`'in ekleme için kullandığı **aynı `start` ofsetinden**
@@ -92,27 +106,44 @@ StyleConstants.TabSet
 `ResolveAttribute/NameAttribute/ElementName` ve liste anahtarları
 **otomatik** elenir; ayrı silme listesi gerekmez.
 
-Yakalama, imleç paragraf elementinin **resolved** öznitelik kümesinden okunur
-(`StyledDocument.getParagraphElement(start).getAttributes()` → her anahtar için
-`isDefined` ise `copyAttributes`). Yardımcı: `copyParaFormat(AttributeSet src)`.
+Yakalama (`snapshotParaFormat(tc, start)`): `StyledDocument.getParagraphElement(
+start).getAttributes()` alınır; her beyaz-liste anahtarı için değer
+**`as.getAttribute(key)`** ile okunur, `null` değilse kopyalanır.
+
+> KRİTİK (codex bulgusu): `isDefined(key)` **yalnız lokal** attr'a bakar;
+> kullanıcının hizalaması/aralığı bir adlandırılmış **stilden miras** geliyorsa
+> (`ResolveAttribute` zinciri) `isDefined` `false` döner → biçim kaçar.
+> `getAttribute(key)` resolver zincirini izleyip **effective** değeri verir;
+> `replace=true` ile bu değer paragrafa lokal olarak yazılır. Bu yüzden
+> `getAttribute(key) != null` kullanılır, `isDefined` DEĞİL.
 
 ### 3. Paragraf öznitelik birleşimi — `insertParagraph`
 
-Düz modda gövde paragrafları (`insertParagraph`, satır 177) için yeni taban:
+Düz modda gövde paragrafları (`insertParagraph`, satır 177) için yeni
+`paraAttrsPlain(para)`. `replace=true` korunur (liste işaretinin sonraki
+paragrafa sızmaması için zaten şart).
 
-```
-CURSOR_PARA_ATTRS  (imlecin hizalama/aralık/girinti/tabset'i)
-  + kaynak liste işaretleri (Bulleted/Numbered/BulletType/NumberType/
-    ListLevel/ListId — paraAttrs'tan yalnız liste dalı)
-```
-
-`replace=true` korunur (liste işaretinin sonraki paragrafa sızmaması için
-zaten şart). Birleşim:
 - `CURSOR_PARA_ATTRS == null` (normal rich paste): mevcut `paraAttrs(para)`
   aynen kullanılır — davranış değişmez.
-- `CURSOR_PARA_ATTRS != null` (düz mod): yeni `paraAttrsPlain(para)` döner →
-  `CURSOR_PARA_ATTRS` kopyası + kaynak liste anahtarları (tip kuralları korunur:
-  `ListLevel=Integer`, `ListId=Long` → ClassCastException riski yok, codex OK).
+- `CURSOR_PARA_ATTRS != null`, **liste DEĞİL** (`para.list == null`): 8 anahtarın
+  hepsi `CURSOR_PARA_ATTRS`'tan → hizalama + aralık + girinti + tabset hepsi
+  imleçten.
+- `CURSOR_PARA_ATTRS != null`, **liste** (`para.list != null`): imleçten **yalnız
+  hizalama/aralık** (`Alignment, SpaceAbove, SpaceBelow, LineSpacing`); girintiler
+  ve tabset (`LeftIndent, RightIndent, FirstLineIndent, TabSet`) **kaynaktan**
+  (`paraAttrs(para)`); üstüne kaynak liste işaretleri.
+
+> KRİTİK (agy + codex bulgusu): Liste girintilerini imleçten almak **asılı
+> girintiyi (hanging indent)** ezer → madde işareti/numara ile metin hizası
+> bozulur (imleç paragrafı genelde 0 girinti taşır). Liste girintisi yapısaldır,
+> kaynaktan korunur. Liste metninin **hizalaması** ise imleçten alınır
+> (kullanıcı iki-yana-yaslı çalışıyor; istenen budur).
+
+Liste anahtarları (`Bulleted/Numbered/BulletType/NumberType/ListLevel/ListId`)
+mevcut `paraAttrs` liste dalından, tip kurallarıyla (`ListLevel=Integer`,
+`ListId=Long`) eklenir → `replace=true` ClassCastException riski yok (codex OK).
+**Tam `paraAttrs(para)` taban olarak KULLANILMAZ** — kullanılırsa kaynak
+hizalama/aralık sızar (codex uyarısı).
 
 `insertTable` hücre paragrafları **mevcut `paraAttrs(p)`'i** kullanmaya devam
 eder (kaynak düzen). `breakAttrs` (char düzeyi) ve `stringFlavor` yedeği
@@ -131,17 +162,28 @@ anahtarı çıkarsa beyaz listeye eklenir (proje kültürü: tahmin değil ölç
 
 ## Test
 
-`tests/PlainPasteStripTest.java`'a (javac+java elle) senaryo eklenir:
+`tests/PlainPasteStripTest.java`'a (javac+java elle) senaryolar eklenir.
+Ortak kurulum: headless `DefaultStyledDocument`; imleç paragrafı
+`ALIGN_JUSTIFIED` + örnek `LineSpacing`/`SpaceBelow`/`LeftIndent`/`TabSet`;
+imleç bu paragrafta. Kaynak model `ALIGN_RIGHT` + farklı aralık taşır.
 
-1. Headless `DefaultStyledDocument` + boş paragraf `StyleConstants.ALIGN_JUSTIFIED`
-   + örnek `LineSpacing`/`SpaceBelow` ile kurulur; imleç bu paragrafa konur.
-2. Kaynak model: `ALIGN_RIGHT` + farklı aralık taşıyan bir gövde paragrafı +
-   bir liste öğesi.
-3. Düz modda `NativeInsert.insert(..., cursorAttrs)` çağrılır.
-4. Doğrulanır: eklenen gövde paragrafının `Alignment == JUSTIFIED`,
-   `LineSpacing/SpaceBelow == imleç değeri`; kaynağın `ALIGN_RIGHT`'ı **düşmüş**;
-   karakter stili imlecinki; liste öğesinin işareti (Bulleted/Numbered)
-   **korunmuş**.
+1. **Gövde paragrafı (liste değil):** düz mod sonrası `Alignment == JUSTIFIED`,
+   `LineSpacing/SpaceBelow/LeftIndent/TabSet == imleç değeri`; kaynağın
+   `ALIGN_RIGHT` + kaynak aralığı **düşmüş**; karakter stili imlecinki.
+2. **Liste öğesi:** işaret (`Bulleted`/`Numbered` + `ListId=Long`/`ListLevel=
+   Integer`) **korunmuş**; `Alignment` imleçten (JUSTIFIED); **`LeftIndent`/
+   `FirstLineIndent` KAYNAKTAN** (imleç sıfır girintisiyle **ezilmemiş** — hanging
+   indent regresyon testi).
+3. **Miras (resolved) imleç biçimi:** imleç paragrafının hizalaması lokal değil
+   bir parent stilden gelirken (`ResolveAttribute`), snapshot yine JUSTIFIED
+   yakalar (`getAttribute` vs `isDefined` regresyonu).
+4. **Offset-0 tablo sentinel:** kaynak ilk bloğu tablo, imleç offset 0 → snapshot
+   sentinel `insertString(0,"\n")`'den **önce** alınır; imleç biçimi doğru okunur,
+   eklenen gövde paragrafları imleç hizalamasını alır.
+5. **Tablo hücresi:** hücre paragraf düzeni **kaynaktan** kalır (imleç JUSTIFIED'a
+   çekilmez); hücre metin stili imlecinki (mevcut PLAINPASTE davranışı).
+6. **Normal rich paste regresyonu:** `cursorAttrs == null` ile `CURSOR_PARA_ATTRS`
+   null kalır; paragraf biçimi kaynaktan (`paraAttrs`) — davranış değişmemiş.
 
 Canlı GUI doğrulaması kullanıcı tarafından elle (proje tercihi).
 
