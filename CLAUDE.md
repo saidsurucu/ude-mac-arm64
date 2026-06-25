@@ -918,6 +918,38 @@ zaten `macosfootnote/FootnoteReflow` referansı içeriyorsa yeniden yamalanmaz.
 
 Teşhis: `UDE_FNLOG=1` → `~/Library/Logs/ude-footnote.txt`.
 
+## PDF dışa aktarımı taze içerik (PDFFRESH=1, 2026-06)
+
+Şikâyet: belgede değişiklik yapıp doğrudan "PDF Olarak Kaydet" deyince PDF
+**değişiklikten ÖNCEKİ** içeriği taşıyor; "önce Kaydet, sonra PDF Olarak Kaydet"
+workaround'u düzeltiyor (Word'de böyle değil). KÖK NEDEN (bytecode iziyle kanıtlı):
+editör paneli `gui.lo` iki-modlu serialize eder —
+`lo.a(OutputStream)` → `lo.a(out, false)` → **ÖNBELLEKLİ** (alan `common.ac`'deki son
+TAM serialize'ın UDF zip'ini yeniden kullanır, yalnız comments.xml'i tazeler);
+`lo.a(out, true)` → **TAZE** (canlı `fi.getDocument()` `DocumentEx`'ten
+`text.J.b(DocumentEx,out)` ile yeniden serialize + `ac`'yi tazeler + PKI/imza/cert
+zip'ini yeniden kurar). Önbellekli dal yalnız `ac!=null && hO.c()==false` iken
+girilir; **düz metin düzenlemeleri `ac`'yi geçersizleştirmez** (`hO.c()` =
+`textUtils.a.a(1)` bit-flag, edit'te flip olmaz) → `ac` bayatlar.
+
+"PDF Olarak Kaydet" (`text.cG` action, format "08", "save-pdf") → save_as → `text.cA`
+→ PDF dosya filtresi `aX.f` → `J.a(J,File)` → **`text.J.b(File)`** (iText `editor.b.b`
+yolu) → içeride `lo.a(out)` = ÖNBELLEKLİ → bayat PDF. ("Kaydet" tam serialize'ı
+tetikleyip `ac`'yi tazelediğinden workaround işliyor.) Not: aX.g→`c(File)` jodconverter/
+OpenOffice yolu zaten canlı `fi.getDocument()` okur (taze) ama OO kurulu olmadığından
+Mac'te kullanılmaz; bayatlık YALNIZ iText `b(File)` yolunda. `b(File)` SADECE PDF'e
+bağlı (görüntü/RTF/XML/UDF ayrı aX→ayrı metot).
+
+ÇÖZÜM (`scripts/macos-pdffresh/PdfFreshPatch.java`, Javassist): `text.J.b(File)`
+içindeki tek `lo.a(OutputStream)` çağrısını `ExprEditor` ile `lo.a(out, true)` yapar →
+PDF her zaman canlı belgeden taze serialize (workaround'un yaptığının aynısı, otomatik).
+Blast radius yalnız PDF dışa aktarımı; diğer kaydetme/imza yolları dokunulmaz.
+İdempotans: tek-arg çağrı yoksa ve iki-arg çağrı varsa "zaten yamalı" deyip atlar
+(build.sh `[ -d …/out/tr ]` ile boş-zip'i önler). Başka yama `text.J`'yi yazmaz
+(çakışma yok). Doğrulama: ham jar'a uygulayıp `javap`'la `b(File)`'ın artık
+`lo.a:(Ljava/io/OutputStream;Z)V` + `iconst_1` çağırdığı görüldü; GUI testi (değişiklik
+yap → doğrudan PDF → son hâl gelmeli) kullanıcıya bırakıldı.
+
 ## Teşhis cephaneliği
 
 - **Yamasız uygulamaya agent takma:** `JAVA_TOOL_OPTIONS=-javaagent:/tmp/dbg.jar` —

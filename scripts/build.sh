@@ -46,6 +46,7 @@ RESIZE_SRC="$SCRIPT_DIR/macos-imgresize" # fare ile imaj boyutlandırma yaması
 LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle" # otomatik düzeltme seçenekleri anında etkin
 ANTET_SRC="$SCRIPT_DIR/antet" # Antetlerim: arka plan diyaloğunda kişisel antet bölümü
 CARET_SRC="$SCRIPT_DIR/macos-caret"     # metin imleci temiz 1px çizim yaması
+PDFFRESH_SRC="$SCRIPT_DIR/macos-pdffresh" # PDF dışa aktarımı canlı belgeden taze serialize (bayat önbellek düzeltmesi)
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
@@ -60,6 +61,7 @@ TEXTREPLACE="${TEXTREPLACE:-1}" # 1=açık (varsayılan; macOS Metin Değiştirm
 PASTERICH="${PASTERICH:-1}" # 1=açık (varsayılan; harici stilli yapıştırma — Word/tarayıcı/PDF→UDE) | 0=kapalı
 PLAINPASTE="${PLAINPASTE:-1}" # 1=açık (varsayılan; Formatsız Yapıştır ⌘⇧V + sağ tık; PASTERICH'e bağlı) | 0=kapalı
 CARETFIX="${CARETFIX:-1}" # 1=açık (varsayılan; metin imleci temiz 1px çizim, harf gövdesine binmez) | 0=kapalı
+PDFFRESH="${PDFFRESH:-1}" # 1=açık (varsayılan; "PDF Olarak Kaydet" canlı belgeden taze serialize — "önce Kaydet" gereksinimi kalkar) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -443,6 +445,27 @@ apply_caretfix() {  # $1=JAR — patch_jar içinden çağrılır
 	c_ok "[caret] temiz 1px imleç yaması uygulandı."
 }
 
+apply_pdffresh() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$PDFFRESH" = "1" ] || return 0
+	c_info "[pdffresh] PDF dışa aktarımı taze serialize yaması ('önce Kaydet' gereksinimini kaldırır)…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[pdffresh] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[pdffresh] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ortak)
+	rm -rf "$BUILD/_pdffreshpatch"; mkdir -p "$BUILD/_pdffreshpatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_pdffreshpatch" "$PDFFRESH_SRC/PdfFreshPatch.java" \
+		|| { c_warn "[pdffresh] PdfFreshPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_pdffreshpatch:$jvs" PdfFreshPatch "$JAR" "$BUILD/_pdffreshpatch/out" \
+		|| die "[pdffresh] PDF taze serialize yaması uygulanamadı (UDE sürümü değişmiş olabilir)."
+	if [ -d "$BUILD/_pdffreshpatch/out/tr" ]; then
+		( cd "$BUILD/_pdffreshpatch/out" && zip -q -r "$JAR" tr )
+		c_ok "[pdffresh] PDF taze serialize yaması uygulandı."
+	else
+		c_ok "[pdffresh] zaten yamalı, atlandı."
+	fi
+}
+
 apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$IMGFULL" = "1" ] || return 0
@@ -738,6 +761,7 @@ patch_jar() {
 	apply_fop_fonts "$JAR"
 	apply_filedialog "$JAR"
 	apply_caretfix "$JAR"
+	apply_pdffresh "$JAR"
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
 	apply_pasterich "$JAR"
@@ -929,6 +953,7 @@ case "${1:-all}" in
 	download) download ;; deps) deps ;; icon-deps) icon_deps ;; shim) shim ;; textkeys) textkeys ;; zoom) zoom ;; lookagent) lookagent ;; patch) patch_jar ;;
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	caret-fix) CARETFIX=1 apply_caretfix "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	pdf-fresh) PDFFRESH=1 apply_pdffresh "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-rich) apply_pasterich "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
