@@ -30,8 +30,12 @@ public final class MacLook {
 
     /** FwcProbe karar kapısı sonucu: "full" | "transparent". */
     private static final String FWC_MODE = "full";
-    /** Trafik ışıkları için şerit sol içliği (px). */
+    /** Trafik ışıkları için klasik menü çubuğu sol içliği (px). */
     private static final int TRAFFIC_INSET = 72;
+    /** Ribbon modunda (klasik menü çubuğu yokken) orb'u trafik ışıklarının
+     *  altına indirmek için ribbon ÜST içliği (px). Klasik menü çubuğu 23px;
+     *  28 hem ışıkları güvenle temizler hem klasik görünüme yakın durur. */
+    private static final int TITLEBAR_TOP_INSET = 28;
     private static final boolean DEBUG = "1".equals(System.getProperty("macoslook.debug"));
     private static final PrintStream LOG = DEBUG ? openLog() : null;
 
@@ -86,12 +90,14 @@ public final class MacLook {
         root.putClientProperty("apple.awt.transparentTitleBar", Boolean.TRUE);
         if ("full".equals(FWC_MODE)) {
             root.putClientProperty("apple.awt.fullWindowContent", Boolean.TRUE);
-            JComponent r = (JComponent) ribbon;
-            r.setBorder(javax.swing.BorderFactory.createCompoundBorder(
-                javax.swing.BorderFactory.createEmptyBorder(0, TRAFFIC_INSET, 0, 0),
-                r.getBorder()));
-            log("ribbon insetlendi");
+            // Ribbon'a trafik-ışığı SOL içliği UYGULANMAZ (kullanıcı isteği: şerit
+            // hep sol kenardan başlasın, soldaki yatay boşluk olmasın). Bunun
+            // yerine ribbon ÜST içlikle aşağı itilir (syncRibbonTopInset) ki orb
+            // klasik moddaki gibi trafik ışıklarının ALTINA insin. Klasik menü
+            // çubuğu kendi SOL içliğini insetMenuBar'dan alır.
             insetMenuBar(f);
+            syncRibbonTopInset(f);
+            installMenuBarWatcher(f);
         }
         java.awt.Color bg = UIManager.getColor("Panel.background");
         if (bg != null) f.setBackground(bg);
@@ -125,6 +131,78 @@ public final class MacLook {
         mb.revalidate();
         mb.repaint();
         log("menü çubuğu insetlendi");
+    }
+
+    /** Ribbon ÜST içliğini menü görünüm moduna göre ayarlar.
+     *  - KLASİK mod (menü çubuğu GÖRÜNÜR): ribbon UI zaten üstte menü çubuğu
+     *    için yer ayırdığından orb ışıkların altında → ek içlik = 0.
+     *  - RIBBON mod (menü çubuğu GÖRÜNMEZ): hiç yer ayrılmaz, orb tepede
+     *    ışıklarla çakışır → üst içlik = TITLEBAR_TOP_INSET ile orb aşağı iner.
+     *  KRİTİK: ribbon modunda menü çubuğu 0-yükseklik OLMAZ (yükseklik 23 kalır),
+     *  UDE onu setVisible(false) ile GİZLER → mod ayrımı `isVisible()` ile
+     *  yapılır (getHeight DEĞİL; canlı StateA probe ile doğrulandı: ribbon
+     *  modunda h=23 ama vis=false). Üst border'ın orb'u tam border yüksekliği
+     *  kadar aşağı ittiği FixProbe ile doğrulandı (orb ekran-y 76→104, top=28).
+     *  Taban border bir kez saklanır (macoslook.ribbonBase); mod geçişlerinde
+     *  compound border ÜST ÜSTE binmesin diye her seferinde tabandan kurulur.
+     *  İdempotans: uygulanan içlik macoslook.ribbonTop'ta tutulur. */
+    private static void syncRibbonTopInset(JFrame f) {
+        Component ribbon = findByClassName(f, "JRibbon");
+        if (!(ribbon instanceof JComponent)) return;
+        JComponent r = (JComponent) ribbon;
+        javax.swing.JMenuBar mb = f.getJMenuBar();
+        boolean classic = mb != null && mb.isVisible();
+        int top = classic ? 0 : TITLEBAR_TOP_INSET;
+        Object appliedO = r.getClientProperty("macoslook.ribbonTop");
+        int applied = (appliedO instanceof Integer) ? (Integer) appliedO : -1;
+        if (applied == top) return;
+        if (!Boolean.TRUE.equals(r.getClientProperty("macoslook.ribbonBaseSet"))) {
+            r.putClientProperty("macoslook.ribbonBase", r.getBorder()); // null olabilir
+            r.putClientProperty("macoslook.ribbonBaseSet", Boolean.TRUE);
+        }
+        javax.swing.border.Border base =
+            (javax.swing.border.Border) r.getClientProperty("macoslook.ribbonBase");
+        javax.swing.border.Border out;
+        if (top == 0) {
+            out = base;
+        } else {
+            javax.swing.border.Border insetB =
+                javax.swing.BorderFactory.createEmptyBorder(top, 0, 0, 0);
+            out = (base == null) ? insetB
+                : javax.swing.BorderFactory.createCompoundBorder(insetB, base);
+        }
+        r.setBorder(out);
+        r.putClientProperty("macoslook.ribbonTop", Integer.valueOf(top));
+        r.revalidate();
+        r.repaint();
+        log("ribbon üst içlik = " + top + " (klasik=" + classic + ")");
+    }
+
+    /** Menü çubuğunun GÖRÜNÜRLÜK değişimini (klasik ↔ ribbon geçişi) izleyip
+     *  ribbon üst içliğini yeniden senkronlar. UDE mod geçişinde menü çubuğunu
+     *  setVisible ile gösterir/gizler (yeniden BOYUTLANDIRMAZ) → componentResized
+     *  DEĞİL, componentShown/componentHidden tetiklenir; ikisi de dinlenir
+     *  (resized de güvenlik için). Menü çubuğu örneği iki modda da aynıdır →
+     *  dinleyici geçişte de geçerli. invokeLater ile UDE'nin yeniden yerleşimi
+     *  oturduktan SONRA uygulanır. İdempotans: rootpane client property guard. */
+    private static void installMenuBarWatcher(JFrame f) {
+        javax.swing.JMenuBar mb = f.getJMenuBar();
+        if (mb == null) return;
+        JComponent root = f.getRootPane();
+        if (Boolean.TRUE.equals(root.getClientProperty("macoslook.mbwatch"))) return;
+        root.putClientProperty("macoslook.mbwatch", Boolean.TRUE);
+        java.awt.event.ComponentAdapter ca = new java.awt.event.ComponentAdapter() {
+            private void resync() {
+                SwingUtilities.invokeLater(() -> {
+                    try { syncRibbonTopInset(f); } catch (Throwable t) { log("mbwatch: " + t); }
+                });
+            }
+            @Override public void componentShown(java.awt.event.ComponentEvent e) { resync(); }
+            @Override public void componentHidden(java.awt.event.ComponentEvent e) { resync(); }
+            @Override public void componentResized(java.awt.event.ComponentEvent e) { resync(); }
+        };
+        mb.addComponentListener(ca);
+        log("menü çubuğu izleyicisi kuruldu");
     }
 
     /** Yerel macOS başlık METNİ şeffaf başlık çubuğunda da çizilir; macOS onu

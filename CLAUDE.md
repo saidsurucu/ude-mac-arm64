@@ -69,21 +69,35 @@ uygulama İÇİNDEN aç.
 "Klasik görünüme geç" (Görünüm sekmesi onay kutusu; tercih KALICI → sonraki
 açılışta da klasik) AÇIKKEN UDE şeridin ÜSTÜNDE klasik in-window `JMenuBar`'ı
 (`…gui.a.x`, mnemonikli Dosya/Giriş/…) gösterir. `fullWindowContent` ile bu çubuk
-da trafik ışıklarının altına düşer ama TRAFFIC_INSET yalnız JRibbon'a uygulanıyordu
-→ "Dosya" ışıkların ALTINA biner ("sol üst köşede menüler iç içe" + "boşluk"
-şikâyeti). Ribbon modunda menü çubuğu GİZLİ (`getJMenuBar` 0-yükseklik döner ama
-menü öğeleri yine de yatay yerleşir); klasik modda 23px görünür (`bounds=[0,0,w,23]`,
-UDE'nin null-layout JLayeredPane'inde mutlak konum). **Menü çubuğu örneği iki
-görünümde de AYNIDIR** (ribbon modunda getJMenuBar null DEĞİL, 0-yükseklik → çubuk
-silinmez, gizlenir; iki probe ile doğrulandı) → açılışta bir kez içlik uygulamak
-klasik moda geçişte de geçerli kalır. **Çözüm:** MacLook `insetMenuBar` — `f.getJMenuBar()`
-bordürüne `EmptyBorder(0,72,0,0)` (idempotans: client property `macoslook.mbinset`).
-Sol içlik menü öğelerini çubuğun KENDİ düzeninde sağa kaydırır (Dosya x=0→x=72);
-mutlak bounds değişmez. Teşhis: dynamic-attach probe (menü bar 0-yükseklik vs 23px
-fark; FixProbe ile EmptyBorder canlı uygulayıp `screencapture -l<winID>` ile "Dosya"
-ışıkları temizliyor doğrulandı — `revalidate` ASENKRON olduğundan içlik sonrası
-`doLayout()` ile senkron okuma şart). Ribbon modunda 0-yükseklik çubuğa içlik
-görünmez (yükseklik artmaz) → yan etki yok.
+da trafik ışıklarının altına düşer → "Dosya" ışıkların ALTINA biner. **Çözüm:**
+MacLook `insetMenuBar` — `f.getJMenuBar()` bordürüne `EmptyBorder(0,72,0,0)`
+(TRAFFIC_INSET; idempotans: client property `macoslook.mbinset`). Sol içlik menü
+öğelerini çubuğun KENDİ düzeninde sağa kaydırır (Dosya x=0→x=72); mutlak bounds
+(UDE'nin null-layout JLayeredPane'i [0,0,w,23]) değişmez. Klasik modda 23px görünür.
+
+**ESKİ TRAFFIC_INSET ribbon'a da uygulanıyordu → klasik modda ribbon'un sol kenarında
+gereksiz ~72px YATAY boşluk (UDE orb sola dayanmıyordu).** Kullanıcı isteği: ribbon
+hep sol kenardan başlasın (sol içlik tamamen kaldırıldı) AMA orb yine de ışıkların
+altına insin → çözüm YATAY değil DİKEY: ribbon moduna girince ribbon'a ÜST içlik
+(`syncRibbonTopInset`, `TITLEBAR_TOP_INSET=28`):
+- **Klasik mod** (menü çubuğu GÖRÜNÜR): ribbon UI üstte menü çubuğu için zaten yer
+  ayırır (orb ribbon-y≈24, ekran-y76) → ek üst içlik 0.
+- **Ribbon mod** (menü çubuğu GÖRÜNMEZ): yer ayrılmaz, orb tepede ışıklarla çakışır
+  (ekran-y53) → 28px üst içlik orb'u ekran-y81'e indirir (klasik 76'ya yakın, ışıklar
+  temiz). Üst border'ın orb'u tam yüksekliği kadar ittiği FixProbe ile doğrulandı
+  (76→104, top=28).
+
+**KRİTİK düzeltme — mod ayrımı `isVisible()` iledir, getHeight DEĞİL:** ribbon
+modunda menü çubuğu **0-yükseklik OLMAZ** (yükseklik 23 KALIR), UDE onu
+`setVisible(false)` ile GİZLER (StateA probe: ribbon modu `h=23 vis=false showing=false`;
+eski "0-yükseklik" notu YANLIŞTI). Dolayısıyla (a) `syncRibbonTopInset` modu
+`mb.isVisible()` ile ayırır; (b) toggle dinleyicisi `componentResized` DEĞİL
+`componentShown`/`componentHidden` dinler (setVisible boyut değiştirmez → resized
+tetiklenmez; ilk denemede içlik hiç uygulanmamasının nedeni buydu). Menü çubuğu
+örneği iki modda da aynı → dinleyici açılışta bir kez kurulur (`macoslook.mbwatch`),
+geçişlerde de geçerli. Teşhis: dynamic-attach StateA/FixProbe (orb ekran-y ölçümü) +
+`screencapture -l<winID>`; bozuk probe jar'ı classloader'da takılır → her denemede
+sınıf adını değiştir (StateA→StateB). `revalidate` ASENKRON → ölçüm öncesi `doLayout()`.
 
 ### Başlık çubuğu yazısı (2026-06)
 
