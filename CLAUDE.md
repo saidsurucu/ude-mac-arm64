@@ -162,6 +162,16 @@ sağ tık → her belgenin adı ayrı görünmeli.
   `updateTreeSafe` (bileşen-başına try'lı updateUI; tek hata ağacın kalanını
   bırakmasın) → kuruluşta DONAN renkleri elle düzelt → repaint. Font policy'ye
   DOKUNMA (yeniden sarmak FlatFontPolicy'yi üst üste bindirir).
+- **KRİTİK: canlı geçiş klavye odağını editörden kaçırır (2026-06-26).** combo
+  seçimi + `updateComponentTreeUI` odağı editörden (`text.t`) alıp editör-dışı
+  konteynere (`gui.iA`) taşır. MacShortcutRemap biçimlendirme kısayolları
+  (Cmd+B/I/U…) sentetik Ctrl'ü ODAK SAHİBİNE gönderdiğinden, switch sonrası
+  Cmd kısayolları kullanıcı metne TIKLAYANA dek "Ctrl'e döndü" görünür (dispatcher
+  sağlam — setSkin LAF zaten Substance olduğundan setLookAndFeel/KFM'e dokunmaz;
+  `UDE_SHORTCUTLOG=1` ile kanıtlandı: focus=gui.iA → redispatch target=gui.iA).
+  Çözüm: `apply` sonunda `invokeLater(restoreEditorFocus)` — aktif pencerede
+  `text.hj` türevi editörü bulup `requestFocusInWindow` (combo'nun asenkron odak
+  transferi BİTTİKTEN sonra; odak zaten metin alanındaysa = arama kutusu dokunma).
 - **Kuruluşta donan renkler** (canlı geçişin gerçek zorluğu; updateUI tazelemez):
   (a) editör kanvas bileşeni `text.hj` türevleri bg'ye E'yi KOPYALAR →
   setBackground(canvasColor); (b) cetvel eV `color_border` STOK #282828 (her
