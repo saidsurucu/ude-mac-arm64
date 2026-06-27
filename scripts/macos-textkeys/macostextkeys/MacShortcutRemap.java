@@ -93,11 +93,15 @@ public final class MacShortcutRemap {
         new Map(KeyEvent.VK_I, META,         null,            KeyEvent.VK_T, CTRL,         Fb.SYNTHETIC), // İtalik      ← Ctrl+T
         new Map(KeyEvent.VK_U, META,         null,            KeyEvent.VK_A, CTRL | SHIFT, Fb.SYNTHETIC), // Altı çizili ← Ctrl+Shift+A
 
-        // — Büyük harf (Mac Word kısayolu ⌘⇧A): menüde yok → sentetik Ctrl+Up (UDE'de
-        //   "BÜYÜK HARF" = Ctrl+Up). Mac Word'de ayrı "küçük harf" kısayolu yoktur;
-        //   küçüğe Shift+F3 döngüsüyle ulaşılır — UDE'nin "Harf Modu Değiştir"i de zaten
-        //   Shift+F3'tür ve Cmd içermediğinden Mac'te doğrudan çalışır (remap gerekmez). —
-        new Map(KeyEvent.VK_A, META | SHIFT, null,            KeyEvent.VK_UP, CTRL,        Fb.SYNTHETIC), // BÜYÜK HARF  ← Ctrl+Up
+        // — Büyük harf: ⌘⇧A BİLEREK BAĞLANMADI. macOS'ta ⌘⇧A, Terminal'in "Search man
+        //   Page Index in Terminal" servisinin (searchManPages) varsayılan key-equivalent'i.
+        //   Servis çağrıları AppKit'in performKeyEquivalent: katmanında, tuş Java'nın
+        //   KeyboardFocusManager'ına ULAŞMADAN önce çözülür → dispatcher'da true döndürmek
+        //   servisi durduramaz. Servis seçimi alıp `x-man-page://<seçim>;type=a` kurar →
+        //   Terminal `man "<seçim>;type=a"` açar (kullanıcı şikâyeti: seçili harfi büyütünce
+        //   sarı Terminal penceresi). Bu yüzden ⌘⇧A'yı YENİDEN EKLEME. UDE'nin "Harf Modu
+        //   Değiştir"i Shift+F3'tür (Cmd içermez → Mac'te yerel çalışır, küçük/Baş Harf/BÜYÜK
+        //   döngüsü) ve büyük harf ihtiyacını zaten karşılar. —
 
         // — Pano / seçim: menü eylemi (zengin-metin), yedek doğrudan metin API'si —
         new Map(KeyEvent.VK_A, META,         "Tümünü Seç",    0, 0, Fb.SELECT_ALL),
