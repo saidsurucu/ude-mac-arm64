@@ -107,43 +107,69 @@ public final class PlainPaste {
     }
 
     /**
-     * UDE'nin kendi sağ tık menüsüne (text.fK → gui.dx.getPopupMenu()) "Formatsız
-     * Yapıştır" öğesini ekler. PlainPastePatch tarafından JPopupMenu.show çağrısından
-     * ÖNCE çağrılır ($0=popup, $1=editör). Öğe "Yapıştır"dan hemen sonra eklenir;
-     * idempotans (popup yeniden gösterilse de tek kopya). Ayrıca UDE'nin Windows
-     * kökenli ^X/^C/^V hızlandırıcıları macOS ⌘ ile gösterilir.
+     * UDE'nin kendi sağ tık menüsüne (text.fK → gui.dx.getPopupMenu()) yapıştırma
+     * öğelerini ekler: "Formatsız Yapıştır" (hızlandırıcısız — ⌘V zaten "akıllı":
+     * UDE-içi formatlı, harici formatsız) ve "Formatlı Yapıştır" (⌘⇧V; forceRich
+     * bayrağıyla zengin yolu zorlar). PlainPastePatch tarafından JPopupMenu.show
+     * çağrısından ÖNCE çağrılır ($0=popup, $1=editör). Sıra: Yapıştır →
+     * Formatsız → Formatlı. İdempotent (popup yeniden gösterilse de tek kopya).
+     * Ayrıca UDE'nin Windows kökenli ^X/^C/^V hızlandırıcıları macOS ⌘ ile
+     * gösterilir.
      */
     public static void addMenuItem(JPopupMenu popup, Component invoker) {
         try {
             if (popup == null || !(invoker instanceof JTextComponent)) return;
-            // İdempotans: zaten varsa yalnız hızlandırıcıları düzelt.
-            for (Component c : popup.getComponents()) {
-                if (c instanceof JMenuItem && "Formatsız Yapıştır".equals(((JMenuItem) c).getText())) {
-                    fixAccelerators(popup);
-                    return;
-                }
-            }
             final JTextComponent tc = (JTextComponent) invoker;
-            JMenuItem mi = new JMenuItem("Formatsız Yapıştır");
-            mi.setEnabled(tc.isEditable() && tc.isEnabled());
-            int meta = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();   // macOS = ⌘
-            mi.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, meta | InputEvent.SHIFT_DOWN_MASK));
-            mi.addActionListener(new ActionListener() {
-                public void actionPerformed(ActionEvent e) { paste(tc); }
-            });
-            // "Yapıştır"ın hemen ardına ekle (yoksa sona).
-            int idx = -1;
-            Component[] cs = popup.getComponents();
-            for (int i = 0; i < cs.length; i++) {
-                if (cs[i] instanceof JMenuItem
-                        && "Yapıştır".equals(((JMenuItem) cs[i]).getText().trim())) { idx = i + 1; break; }
+            boolean hasPlain = false, hasRich = false;
+            for (Component c : popup.getComponents()) {
+                if (!(c instanceof JMenuItem)) continue;
+                String txt = ((JMenuItem) c).getText();
+                if ("Formatsız Yapıştır".equals(txt)) hasPlain = true;
+                if ("Formatlı Yapıştır".equals(txt)) hasRich = true;
             }
-            if (idx >= 0 && idx <= popup.getComponentCount()) popup.insert(mi, idx);
-            else popup.add(mi);
+            boolean enabled = tc.isEditable() && tc.isEnabled();
+            if (!hasPlain) {
+                JMenuItem mi = new JMenuItem("Formatsız Yapıştır");
+                mi.setEnabled(enabled);
+                // Hızlandırıcı YOK: ⌘⇧V artık Formatlı Yapıştır'ın.
+                mi.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) { paste(tc); }
+                });
+                insertAfter(popup, mi, "Yapıştır");
+            }
+            if (!hasRich) {
+                JMenuItem mi = new JMenuItem("Formatlı Yapıştır");
+                mi.setEnabled(enabled);
+                int meta = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();   // macOS = ⌘
+                mi.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, meta | InputEvent.SHIFT_DOWN_MASK));
+                mi.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        // tc = hj türevi editör → virtual dispatch zengin hj.paste();
+                        // forceRich kancaya "formatlı" dedirtir (UDE-içi zaten formatlı).
+                        PasteMode.setForceRich(true);
+                        try { tc.paste(); } finally { PasteMode.setForceRich(false); }
+                    }
+                });
+                insertAfter(popup, mi, "Formatsız Yapıştır");
+            }
             fixAccelerators(popup);
         } catch (Throwable e) {
             log("addMenuItem", e);
         }
+    }
+
+    /** mi'yi metni `after` olan öğeden hemen sonra ekler (bulunamazsa sona). */
+    private static void insertAfter(JPopupMenu popup, JMenuItem mi, String after) {
+        int idx = -1;
+        Component[] cs = popup.getComponents();
+        for (int i = 0; i < cs.length; i++) {
+            if (cs[i] instanceof JMenuItem) {
+                String t = ((JMenuItem) cs[i]).getText();
+                if (t != null && after.equals(t.trim())) { idx = i + 1; break; }
+            }
+        }
+        if (idx >= 0 && idx <= popup.getComponentCount()) popup.insert(mi, idx);
+        else popup.add(mi);
     }
 
     /** UDE'nin ^X/^C/^V (Ctrl) hızlandırıcılarını macOS ⌘ ile göster. İdempotent. */
