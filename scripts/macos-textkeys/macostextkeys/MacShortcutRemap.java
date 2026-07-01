@@ -69,7 +69,7 @@ public final class MacShortcutRemap {
     private static final int REL = META | CTRL | SHIFT | ALT;
 
     /** Menü öğesi bulunamazsa uygulanacak yedek davranış. */
-    private enum Fb { SYNTHETIC, SELECT_ALL, COPY, PASTE, PLAIN_PASTE, CUT, CLOSE_WINDOW, MINIMIZE, NONE }
+    private enum Fb { SYNTHETIC, SELECT_ALL, COPY, PASTE, RICH_PASTE, CUT, CLOSE_WINDOW, MINIMIZE, NONE }
 
     /** Bir Cmd kısayolunun ne yapacağını tanımlayan kayıt. */
     private static final class Map {
@@ -107,9 +107,10 @@ public final class MacShortcutRemap {
         new Map(KeyEvent.VK_A, META,         "Tümünü Seç",    0, 0, Fb.SELECT_ALL),
         new Map(KeyEvent.VK_C, META,         "Kopyala",       0, 0, Fb.COPY),
         new Map(KeyEvent.VK_V, META,         "Yapıştır",      0, 0, Fb.PASTE),
-        // Formatsız Yapıştır (Word ⌘⇧V): menüde yok → fb. Editörde reflection ile
-        // macospasterich.PlainPaste; editör-dışı alanlarda normal yapıştırma.
-        new Map(KeyEvent.VK_V, META | SHIFT, null,            0, 0, Fb.PLAIN_PASTE),
+        // ⌘V "akıllı"dır: menü "Yapıştır" → paste() → UDE-içi kopya formatlı,
+        // harici içerik PASTERICH kancasının VARSAYILANI ile formatsız (PasteMode).
+        // ⌘⇧V = Formatlı Yapıştır: forceRich bayrağı + aynı menü eylemi.
+        new Map(KeyEvent.VK_V, META | SHIFT, null,            0, 0, Fb.RICH_PASTE),
         new Map(KeyEvent.VK_X, META,         "Kes",           0, 0, Fb.CUT),
 
         // — Geri / İleri al —
@@ -331,14 +332,15 @@ public final class MacShortcutRemap {
             case SELECT_ALL: if (c instanceof JTextComponent) ((JTextComponent) c).selectAll(); break;
             case COPY:       if (c instanceof JTextComponent) ((JTextComponent) c).copy();      break;
             case PASTE:      if (c instanceof JTextComponent) ((JTextComponent) c).paste();     break;
-            case PLAIN_PASTE:
+            case RICH_PASTE:
                 if (c instanceof JTextComponent) {
+                    setForceRich(true);
                     try {
-                        Class.forName("macospasterich.PlainPaste")
-                             .getMethod("paste", JTextComponent.class)
-                             .invoke(null, (JTextComponent) c);
-                    } catch (Throwable ignore) {
-                        ((JTextComponent) c).paste();   // PASTERICH yoksa normal yapıştır
+                        JMenuItem mi = findMenuItem("Yapıştır", c);
+                        if (mi != null) mi.doClick(0);
+                        else ((JTextComponent) c).paste();
+                    } finally {
+                        setForceRich(false);
                     }
                 }
                 break;
@@ -356,10 +358,19 @@ public final class MacShortcutRemap {
             case SELECT_ALL: tc.selectAll(); return true;
             case COPY:       tc.copy();      return true;
             case PASTE: if (tc.isEditable() && tc.isEnabled()) { tc.paste(); return true; } return false;
-            case PLAIN_PASTE: if (tc.isEditable() && tc.isEnabled()) { tc.paste(); return true; } return false;
+            case RICH_PASTE: if (tc.isEditable() && tc.isEnabled()) { tc.paste(); return true; } return false;
             case CUT:   if (tc.isEditable() && tc.isEnabled()) { tc.cut();   return true; } return false;
             default: return false;
         }
+    }
+
+    /** macospasterich.PasteMode.forceRich bayrağı (PASTERICH=0 build'de sınıf yok → sessiz no-op). */
+    private static void setForceRich(boolean b) {
+        try {
+            Class.forName("macospasterich.PasteMode")
+                 .getMethod("setForceRich", boolean.class)
+                 .invoke(null, Boolean.valueOf(b));
+        } catch (Throwable ignore) { }
     }
 
     /**
