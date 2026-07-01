@@ -663,6 +663,17 @@ boşluğu parantez DIŞINDA ara (`v.replaceAll("\\([^)]*\\)","")` sonra boşluk 
 
 ## Formatsız Yapıştır (PLAINPASTE=1, 2026-06)
 
+**VARSAYILAN DAVRANIŞ DEĞİŞTİ (2026-07):** ⌘V ve sağ tık "Yapıştır" artık
+AKILLI — UDE-içi kopya (EditorDataFlavor, paste() başında kancasız işlenir)
+FORMATLI, harici içerik FORMATSIZ (PASTERICH kancasının varsayılanı:
+`macospasterich.PasteMode` cursorAttrs geçirir). ⌘⇧V ve sağ tık "Formatlı
+Yapıştır" (YENİ öğe) `PasteMode.setForceRich` bayrağını try/finally ile set
+edip zengin yolu zorlar; MacShortcutRemap `Fb.RICH_PASTE` bayrağı reflection
+ile set eder + menü "Yapıştır" tıklar. "Formatsız Yapıştır" öğesi kalır
+(hızlandırıcı göstergesi kaldırıldı). Spec:
+`docs/superpowers/specs/2026-07-01-plain-paste-default-design.md`. Aşağıdaki
+⌘⇧V=formatsız anlatımı TARİHSEL bağlamdır.
+
 Word'ün "Yalnızca Metni Koru"su: pano içeriğini KARAKTER STİLİ olmadan (imlecin
 stilini alarak) ama **tablo/imaj/liste yapısı KORUNARAK** yapıştır. **Paragraf
 biçimi (hizalama/aralık/girinti) de imlecin paragrafından alınır** — aşağıdaki
