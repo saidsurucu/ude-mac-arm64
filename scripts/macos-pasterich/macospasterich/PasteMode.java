@@ -20,7 +20,7 @@ public final class PasteMode {
 
     private static volatile boolean forceRich;
 
-    /** Çağıranlar try/finally ile set/temizlemeli (yarım bayak kalmasın). */
+    /** Çağıranlar try/finally ile set/temizlemeli (yarım bayrak kalmasın). */
     public static void setForceRich(boolean b) { forceRich = b; }
 
     /** Kancanın HTML dalı: varsayılan formatsız, forceRich'te formatlı. */

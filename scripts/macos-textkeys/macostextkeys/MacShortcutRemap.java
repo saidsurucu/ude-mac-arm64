@@ -336,6 +336,8 @@ public final class MacShortcutRemap {
                 if (c instanceof JTextComponent) {
                     setForceRich(true);
                     try {
+                        // doClick(0) eylemi SENKRON çalıştırır → finally gerçekten paste'i kapsar
+                        // (asenkron olsaydı bayrak erken temizlenirdi).
                         JMenuItem mi = findMenuItem("Yapıştır", c);
                         if (mi != null) mi.doClick(0);
                         else ((JTextComponent) c).paste();
