@@ -35,6 +35,11 @@ import java.io.FileOutputStream;
  * enjekte edilmiş olmalı (apply_pasterich sırası; Javassist insertBefore
  * derlemesi RichPaste'i jar classpath'inden çözer).
  *
+ * 2026-07: Enjekte dal RichPaste'i doğrudan değil macospasterich.PasteMode
+ * üzerinden çağırır — varsayılan formatsız, ⌘⇧V/"Formatlı Yapıştır" forceRich
+ * bayrağıyla zengin yolu zorlar. Spec: docs/superpowers/specs/
+ * 2026-07-01-plain-paste-default-design.md
+ *
  * Argümanlar: <editor-app.jar> <out-dir>
  */
 public class PasteRichPatch {
@@ -58,6 +63,9 @@ public class PasteRichPatch {
         // canlı editöre YEREL eklenir (DocumentEx.a ile gerçek tablo + StyleConstants
         // paragraf/karakter). copy→paste YOK (tabloları düzleştiriyordu); clipboard/
         // özyineleme/NPE riski yok. Başarıda return true (düz-metin fallback çalışmaz).
+        // Varsayılan FORMATSIZ (2026-07): PasteMode forceRich bayrağına göre
+        // cursorAttrs (formatsız) ya da null (formatlı) geçirir; ⌘V/menü
+        // "Yapıştır" böylece "akıllı" olur (UDE-içi formatlı, harici formatsız).
         String src =
               "{"
             + "  try {"
@@ -67,11 +75,11 @@ public class PasteRichPatch {
             + "      if (__o instanceof java.lang.String) {"
             + "        java.lang.String __h = (java.lang.String) __o;"
             + "        if (__h.indexOf(\"uyap-web-editor-data\") < 0) {"
-            + "          if (macospasterich.RichPaste.insertInto(this, __h)) return true;"
+            + "          if (macospasterich.PasteMode.insertHtml(this, __h)) return true;"
             + "        }"
             + "      }"
             + "    } else if (__t != null) {"
-            + "      if (macospasterich.RichPaste.insertRtf(this, __t)) return true;"
+            + "      if (macospasterich.PasteMode.insertRtf(this, __t)) return true;"
             + "    }"
             + "  } catch (java.lang.Throwable __e) { macospasterich.RichPaste.logExternal(__e); }"
             + "}";
