@@ -62,7 +62,6 @@ PASTERICH="${PASTERICH:-1}" # 1=açık (varsayılan; harici stilli yapıştırma
 PLAINPASTE="${PLAINPASTE:-1}" # 1=açık (varsayılan; Formatsız Yapıştır ⌘⇧V + sağ tık; PASTERICH'e bağlı) | 0=kapalı
 CARETFIX="${CARETFIX:-1}" # 1=açık (varsayılan; metin imleci temiz 1px çizim, harf gövdesine binmez) | 0=kapalı
 PDFFRESH="${PDFFRESH:-1}" # 1=açık (varsayılan; "PDF Olarak Kaydet" canlı belgeden taze serialize — "önce Kaydet" gereksinimi kalkar) | 0=kapalı
-LINESPACING="${LINESPACING:-1}" # 1=açık (varsayılan; Giriş sekmesinde Satır Aralığı dropdown'u — Word seti 1,0..3,0) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -271,9 +270,6 @@ textkeys() {
 	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_textkeys" $(find "$TEXTKEYS_SRC" -name '*.java') \
 		|| die "macos-textkeys derlenemedi."
 	c_ok "macos-textkeys derlendi ($(find "$BUILD/_textkeys" -name '*.class' | wc -l | tr -d ' ') sınıf)"
-	# LINESPACING=0: satır-aralığı paketi jar'a girmesin (MacTextKeys yansıma
-	# ile arar; sınıf yoksa sessizce atlar).
-	[ "$LINESPACING" = "1" ] || { rm -rf "$BUILD/_textkeys/macoslinespacing"; c_info "[textkeys] LINESPACING=0, macoslinespacing budandı."; }
 	# Native diyalog (NSSavePanel) pano kısayolları: dosya adı kutusunda Cmd+V.
 	# Panel AWT'nin dışında → Java'dan çözülemez; agent bu dylib'i System.load eder.
 	c_info "native diyalog kısayolları dylib'i derleniyor (NSSavePanel Cmd+V)…"
@@ -802,9 +798,7 @@ package() {
 	( cd "$BUILD/_shim" && "$(dirname "$jp")/jar" cf "$in/eawt-shim.jar" com )
 	# macOS metin kısayolları agent'ını jar yap (-javaagent ile yüklenecek)
 	printf 'Premain-Class: macostextkeys.MacTextKeys\nAgent-Class: macostextkeys.MacTextKeys\n' > "$BUILD/_textkeys/MANIFEST.MF"
-	local tkpkgs="macostextkeys"
-	[ -d "$BUILD/_textkeys/macoslinespacing" ] && tkpkgs="$tkpkgs macoslinespacing"
-	( cd "$BUILD/_textkeys" && "$(dirname "$jp")/jar" cfm "$in/macos-textkeys.jar" MANIFEST.MF $tkpkgs )
+	( cd "$BUILD/_textkeys" && "$(dirname "$jp")/jar" cfm "$in/macos-textkeys.jar" MANIFEST.MF macostextkeys )
 	# Native diyalog kısayolları dylib'i agent jar'ın yanına ($APPDIR) — agent System.load eder.
 	cp "$BUILD/_textkeys/libnativedialogkeys.dylib" "$in/" || die "libnativedialogkeys.dylib eksik (textkeys yeniden çalıştır)."
 	printf 'Premain-Class: macoszoom.MacZoom\nAgent-Class: macoszoom.MacZoom\n' > "$BUILD/_zoom/MANIFEST.MF"

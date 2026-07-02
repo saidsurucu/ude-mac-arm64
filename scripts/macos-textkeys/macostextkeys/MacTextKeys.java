@@ -87,17 +87,6 @@ public final class MacTextKeys {
         // macOS sistem geneli Metin Değiştirme (Ayarlar → Klavye) kısayollarını
         // UDE metin alanlarında uygula ("mrb " → "Merhaba! ").
         TextReplace.install();
-        // Giriş sekmesine Word-tarzı Satır Aralığı dropdown'u (LINESPACING=1).
-        // Doğrudan referans YOK: LINESPACING=0 build'inde paket jar'da olmaz,
-        // ClassNotFoundException sessizce yutulur — agent geri kalanı etkilenmez.
-        try {
-            Class.forName("macoslinespacing.LineSpacingMenu")
-                 .getMethod("install").invoke(null);
-        } catch (ClassNotFoundException e) {
-            // LINESPACING=0 — paket bilinçli dışarıda.
-        } catch (Throwable t) {
-            System.err.println("[macos-textkeys] linespacing kurulamadı: " + t);
-        }
         try {
             Toolkit.getDefaultToolkit().addAWTEventListener(new AWTEventListener() {
                 @Override public void eventDispatched(AWTEvent e) {
