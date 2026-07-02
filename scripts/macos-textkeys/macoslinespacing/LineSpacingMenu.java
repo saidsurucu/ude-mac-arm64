@@ -112,7 +112,10 @@ public final class LineSpacingMenu {
         Object callback = Proxy.newProxyInstance(cl, new Class<?>[]{cbCls},
                 new InvocationHandler() {
                     @Override public Object invoke(Object p, Method m, Object[] a) throws Throwable {
-                        if ("getPopupPanel".equals(m.getName())) return buildPopup(cl);
+                        if ("getPopupPanel".equals(m.getName())) {
+                            try { return buildPopup(cl); }
+                            catch (Throwable t) { LsLog.log("buildPopup: " + t); return null; }
+                        }
                         if ("equals".equals(m.getName())) return p == a[0];
                         if ("hashCode".equals(m.getName())) return System.identityHashCode(p);
                         return null;
