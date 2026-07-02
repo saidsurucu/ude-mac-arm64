@@ -791,3 +791,249 @@ git add CLAUDE.md docs/superpowers/specs/2026-07-02-line-spacing-dropdown-design
 git add -f docs/superpowers/plans/2026-07-02-line-spacing-dropdown.md
 git commit -m "docs(linespacing): CLAUDE.md bölümü + spec durumu — LINESPACING=1 satır aralığı dropdown'u"
 ```
+
+---
+
+# REVİZYON (2026-07-02/2): native popup'a 1.5 — ayrı buton geri alınır
+
+Task 4 bulgusu: UDE'nin Giriş>Paragraf bandında zaten native satır-aralığı
+popup'ı var (`tr.gov.uyap.system.a.b.a.a.D` buton → `…a.a.M` popup; öğeler
+"1.0","1.15","2.0","2.5","3.0"; dinleyiciler N/O/P/Q/R → `D.a(float)`),
+yalnız "1.5" eksik. Kullanıcı kararı: ayrı buton yerine native popup'a 1.5
+eklensin. Task 1-3 geri alınır; yerine Javassist yaması gelir. Orijinal
+Task 4/5 yerine aşağıdaki R1-R4 geçerlidir.
+
+### Task R1: Ayrı-buton işini geri al (revert)
+
+**Files:** revert: 33908bc, cab60ae, edf3c8a, 103962a (tek revert commit'i)
+
+- [ ] `git revert --no-commit 103962a edf3c8a cab60ae 33908bc` → tek commit:
+  `revert(linespacing): ayrı buton yaklaşımı geri alındı — native popup'a 1.5 eklenecek (Task 4 bulgusu)`
+- [ ] Doğrula: `scripts/macos-textkeys/macoslinespacing/` yok,
+  `tests/LineSpacingApplyTest.java` yok, `git grep -n LINESPACING scripts/build.sh` boş,
+  `git grep -n linespacing scripts/macos-textkeys/macostextkeys/MacTextKeys.java` boş,
+  `bash -n scripts/build.sh` exit 0.
+
+### Task R2: LineSpacingPatch (Javassist) + build.sh wiring
+
+**Files:**
+- Create: `scripts/macos-linespacing/LineSpacingPatch.java`
+- Modify: `scripts/build.sh` (SRC değişkeni ~satır 49 civarı; bayrak ~satır 64;
+  `apply_linespacing()` fonksiyonu `apply_pdffresh`'ten hemen sonra;
+  `patch_jar` zincirinde `apply_pdffresh "$JAR"` satırından sonra çağrı;
+  standalone case `pdf-fresh)` satırının yanına)
+
+**Interfaces:**
+- Produces: `apply_linespacing` (patch_jar adımı), `LINESPACING=1` bayrağı,
+  jar'da `tr/gov/uyap/system/a/b/a/a/LS15.class` + yamalı `M.class`.
+
+- [ ] **Step 1: LineSpacingPatch.java yaz** (PdfFreshPatch deseni):
+
+```java
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.CtConstructor;
+import javassist.CtMethod;
+import javassist.expr.ExprEditor;
+import javassist.expr.MethodCall;
+
+import java.io.File;
+import java.io.FileOutputStream;
+
+/**
+ * Native satır aralığı menüsüne "1.5" ekler (satıcı unutmuş).
+ *
+ * Giriş>Paragraf bandındaki satır-aralığı popup'ı tr.gov.uyap.system.a.b.a.a.M
+ * (JCommandPopupMenu): öğeler "1.0","1.15","2.0","2.5","3.0"; her öğenin
+ * dinleyicisi (N/O/P/Q/R) tek satır M.a(this.a).a(görünenDeğer) — D.a(float)
+ * satıcının kendi uygulama yolu (display−1 dönüşümü + undo/seçim mantığı orada).
+ *
+ * Yama: (1) "1.15" dinleyicisi O, LS15 adıyla aynı pakete kopyalanır
+ * (getAndRename), gövdesi 1.5f'e çevrilir; (2) M kurucusunda 3. addMenuButton
+ * ("2.0" öğesini ekleyen çağrı) öncesine JCommandMenuButton("1.5", null) +
+ * LS15 dinleyicisi enjekte edilir → menü sırası 1.0, 1.15, 1.5, 2.0, 2.5, 3.0.
+ *
+ * İdempotans: LS15 jar'da varsa atlanır. Nokta biçimi "1.5" native öğelerle
+ * tutarlı (menü satıcı biçiminde). UDF formatı değişmez.
+ *
+ * Argümanlar: <editor-app.jar> <out-dir>
+ */
+public class LineSpacingPatch {
+    static final String M   = "tr.gov.uyap.system.a.b.a.a.M";
+    static final String O   = "tr.gov.uyap.system.a.b.a.a.O";
+    static final String LS  = "tr.gov.uyap.system.a.b.a.a.LS15";
+    static final String BTN = "org.pushingpixels.flamingo.api.common.JCommandMenuButton";
+
+    public static void main(String[] args) throws Exception {
+        if (args.length != 2) {
+            System.err.println("Kullanım: LineSpacingPatch <editor-app.jar> <out-dir>");
+            System.exit(2);
+        }
+        String jar = args[0];
+        File outDir = new File(args[1]);
+
+        ClassPool pool = ClassPool.getDefault();
+        pool.insertClassPath(jar);
+
+        if (pool.getOrNull(LS) != null) {
+            System.out.println("[LineSpacingPatch] zaten yamalı (LS15 mevcut); atlandı.");
+            return;
+        }
+
+        CtClass ls = pool.getAndRename(O, LS);
+        CtMethod ap = ls.getDeclaredMethod("actionPerformed");
+        ap.setBody("{ " + M + ".a(this.a).a(1.5f); }");
+
+        CtClass m = pool.get(M);
+        CtConstructor ctor = m.getDeclaredConstructors()[0];
+        final int[] count = {0};
+        final int[] hit = {0};
+        ctor.instrument(new ExprEditor() {
+            @Override
+            public void edit(MethodCall mc) throws javassist.CannotCompileException {
+                if (!"addMenuButton".equals(mc.getMethodName())) return;
+                count[0]++;
+                if (count[0] != 3) return;
+                mc.replace(
+                    "{ " + BTN + " b15 = new " + BTN + "(\"1.5\", null);"
+                  + "  b15.addActionListener(new " + LS + "($0));"
+                  + "  $0.addMenuButton(b15);"
+                  + "  $proceed($$); }");
+                hit[0]++;
+            }
+        });
+        if (hit[0] != 1) {
+            throw new IllegalStateException(
+                "M kurucusunda 3. addMenuButton bulunamadı (toplam=" + count[0]
+                + ") — UDE sürümü değişmiş olabilir.");
+        }
+
+        write(outDir, "tr/gov/uyap/system/a/b/a/a/LS15.class", ls.toBytecode());
+        write(outDir, "tr/gov/uyap/system/a/b/a/a/M.class", m.toBytecode());
+        System.out.println("[LineSpacingPatch] satır aralığı menüsüne 1.5 eklendi (M + LS15 yazıldı).");
+    }
+
+    static void write(File outDir, String rel, byte[] bytes) throws Exception {
+        File f = new File(outDir, rel);
+        f.getParentFile().mkdirs();
+        try (FileOutputStream fo = new FileOutputStream(f)) {
+            fo.write(bytes);
+        }
+    }
+}
+```
+
+- [ ] **Step 2: build.sh wiring** (dört ek):
+
+(a) SRC değişkeni — `PDFFRESH_SRC=` satırının altına:
+```bash
+LINESPACING_SRC="$SCRIPT_DIR/macos-linespacing" # native satır aralığı menüsüne 1.5 ekleyen yama
+```
+
+(b) Bayrak — `PDFFRESH="${PDFFRESH:-1}"` satırının altına:
+```bash
+LINESPACING="${LINESPACING:-1}" # 1=açık (varsayılan; Giriş>Paragraf satır aralığı menüsüne 1.5 eklenir — satıcı unutmuş) | 0=kapalı
+```
+
+(c) `apply_pdffresh()` fonksiyonunun kapanışından sonra (apply_pdffresh deseni):
+```bash
+apply_linespacing() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$LINESPACING" = "1" ] || return 0
+	c_info "[linespacing] satır aralığı menüsüne 1.5 ekleniyor (satıcı unutmuş)…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[linespacing] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[linespacing] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ortak)
+	rm -rf "$BUILD/_lspatch"; mkdir -p "$BUILD/_lspatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_lspatch" "$LINESPACING_SRC/LineSpacingPatch.java" \
+		|| { c_warn "[linespacing] LineSpacingPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_lspatch:$jvs" LineSpacingPatch "$JAR" "$BUILD/_lspatch/out" \
+		|| die "[linespacing] 1.5 yaması uygulanamadı (UDE sürümü değişmiş olabilir)."
+	if [ -d "$BUILD/_lspatch/out/tr" ]; then
+		( cd "$BUILD/_lspatch/out" && zip -q -r "$JAR" tr )
+		c_ok "[linespacing] satır aralığı menüsüne 1.5 eklendi."
+	else
+		c_ok "[linespacing] zaten yamalı, atlandı."
+	fi
+}
+```
+
+(d) `patch_jar` zincirinde `apply_pdffresh "$JAR"` satırından sonra:
+```bash
+	apply_linespacing "$JAR"
+```
+ve standalone case satırı (`pdf-fresh)` satırının yanına):
+```bash
+	line-spacing) LINESPACING=1 apply_linespacing "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+```
+
+- [ ] **Step 3: Yerinde doğrulama (tam build'siz).** Mevcut kaynak jar'ın
+  KOPYASI üzerinde patch'i çalıştır ve javap ile doğrula:
+```bash
+cd /Users/saidsurucu/Documents/GitHub/ude-mac-arm
+cp "$(ls src-app/app/Contents/Java/editor-app.jar 2>/dev/null || echo build/_input/editor-app.jar)" /tmp/ls-test.jar
+JVS=$(bash -c 'source scripts/build.sh 2>/dev/null; icon_deps' 2>/dev/null) || JVS=$(ls "$HOME"/.m2/repository/org/javassist/javassist/*/javassist-*.jar 2>/dev/null | head -1)
+mkdir -p /tmp/lspatch/out && javac --release 11 -cp "$JVS" -d /tmp/lspatch scripts/macos-linespacing/LineSpacingPatch.java
+java -cp "/tmp/lspatch:$JVS" LineSpacingPatch /tmp/ls-test.jar /tmp/lspatch/out
+(cd /tmp/lspatch/out && zip -q -r /tmp/ls-test.jar tr)
+javap -classpath /tmp/ls-test.jar -c -p tr.gov.uyap.system.a.b.a.a.M | grep -c 'String 1.5'
+javap -classpath /tmp/ls-test.jar -c -p tr.gov.uyap.system.a.b.a.a.LS15 | grep 'float 1.5\|D.a'
+```
+Beklenen: M'de `String 1.5` ≥1; LS15'te `ldc … float 1.5f` ve `D.a:(F)V` çağrısı.
+(İkinci kez çalıştırınca "zaten yamalı" mesajı — idempotans.) Javassist yolunu
+build.sh'teki `icon_deps` neresi sağlıyorsa oradan al (source hilesi çalışmazsa
+`grep -n 'icon_deps()' -A 10 scripts/build.sh` ile bak).
+`bash -n scripts/build.sh` exit 0.
+
+- [ ] **Step 4: Commit**
+```bash
+git add scripts/macos-linespacing/LineSpacingPatch.java scripts/build.sh
+git commit -m "feat(linespacing): native satır aralığı menüsüne 1.5 — M kurucusuna Javassist enjeksiyonu (LS15=O kopyası, D.a(1.5f))"
+```
+
+### Task R3: Tam yeniden build + canlı doğrulama
+
+- [ ] `bash scripts/build.sh download && bash scripts/build.sh patch && bash scripts/build.sh lookagent && bash scripts/build.sh textkeys && bash scripts/build.sh package && bash scripts/build.sh sign`
+  — patch çıktısında `[linespacing] satır aralığı menüsüne 1.5 eklendi.` satırı görülmeli.
+- [ ] Paketlenmiş jar doğrulaması:
+```bash
+javap -classpath "build/Uyap Doküman Editörü.app/Contents/app/editor-app.jar" -c -p tr.gov.uyap.system.a.b.a.a.M | grep -c 'String 1.5'
+```
+Beklenen: ≥1. (macos-textkeys.jar'da macoslinespacing OLMAMALI — revert doğrulaması: `unzip -l ... | grep -c macoslinespacing` → 0.)
+- [ ] Uygulamayı başlat (doğrudan binary, `pkill` önce), pencere-tekil ekran görüntüsü:
+  Giriş sekmesi → satır aralığı butonuna popup açtırmak sentetik tıklamayla YAPILMAZ;
+  ekran görüntüsünde yalnız bandın görünümü yeterli, popup içeriği kullanıcı testinde.
+- [ ] Kullanıcı testi (elle): satır aralığı popup'ında **1.5** görünmeli; birkaç
+  paragraf seçip 1.5 uygula → satırlar açılmalı; kaydet →
+  `unzip -p <dosya>.udf content.xml | grep -o 'LineSpacing="[^"]*"' | sort | uniq -c`
+  → `LineSpacing="0.5"`; kapat/aç → korunmalı.
+
+### Task R4: Dokümantasyon (orijinal Task 5'in yerine)
+
+- [ ] CLAUDE.md bölümü (revize içerik):
+```markdown
+## Satır aralığı 1.5 (LINESPACING=1, 2026-07)
+
+UDE'nin Giriş>Paragraf bandındaki NATIVE satır-aralığı popup'ı
+(`tr.gov.uyap.system.a.b.a.a.D` buton → `…a.a.M extends JCommandPopupMenu`)
+"1.0,1.15,2.0,2.5,3.0" içerir — **1.5 satıcı tarafından unutulmuş**.
+`scripts/macos-linespacing/LineSpacingPatch.java` (Javassist, pdffresh deseni)
+M kurucusunda 3. addMenuButton ("2.0") öncesine "1.5" öğesi enjekte eder;
+dinleyici LS15 = "1.15" dinleyicisi O'nun getAndRename kopyası, gövde
+`M.a(this.a).a(1.5f)` → satıcının kendi uygulama yolu `D.a(float)` (display−1
+dönüşümü + undo/seçim orada; UDF `LineSpacing` float zaten destekler, format
+değişikliği YOK — parser d.G/d.B getFloatValue; Paragraf diyaloğu gui.cM
+serbest alanı 1,5'i zaten kabul eder). İdempotans: LS15 jar'da varsa atlanır.
+TARİHSEL: önce ayrı JCommandButton denendi (Task 1-3, revert edildi) —
+`AbstractCommandButton.setToolTipText` KOŞULSUZ UnsupportedOperationException
+fırlatır ("Use rich tooltip APIs") → ribbon'a Flamingo butonu eklerken
+setToolTipText ÇAĞIRMA (footnote deseni de çağırmaz). Native kontrolü ilk
+taramanın kaçırma nedeni: sınıflar `tr.com.havelsan` değil `tr.gov.uyap`
+ağacında. Teşhis: canlı popup içeriği ile bytecode string'lerini karşılaştır.
+```
+- [ ] Hafıza dosyası `line-spacing-dropdown.md` (revize):
+  native kontrol keşfi (tr.gov.uyap ağacı!), setToolTipText tuzağı,
+  "format değişikliği sanılan işler çoğu kez UI eksiği" dersi,
+  [[macos-footnote]] ve [[modern-2026-mechanism]] bağlantıları; MEMORY.md satırı.
+- [ ] Spec zaten revize edildi (kontrol et); plan + spec + CLAUDE.md + memory commit.

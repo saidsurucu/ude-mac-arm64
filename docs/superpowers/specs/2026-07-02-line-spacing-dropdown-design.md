@@ -1,7 +1,40 @@
 # Satır Aralığı Dropdown'u (LINESPACING=1) — Tasarım
 
 **Tarih:** 2026-07-02
-**Durum:** Onaylandı (kullanıcı: "word gibi olsun")
+**Durum:** REVİZE EDİLDİ (aşağıya bak) — orijinal ayrı-buton tasarımı geri alındı
+
+## REVİZYON (2026-07-02/2, kullanıcı onaylı): native popup'a 1.5 ekle
+
+Task 4 canlı doğrulaması iki şey ortaya çıkardı:
+
+1. **UDE'nin Giriş > Paragraf bandında ZATEN native bir satır-aralığı
+   popup'ı var**: `tr.gov.uyap.system.a.b.a.a.D` (JCommandButton) →
+   `…a.a.M extends JCommandPopupMenu`. Öğeler string literal **"1.0",
+   "1.15", "2.0", "2.5", "3.0"** + ayraç + "Paragraf Özellikleri"
+   (paragraph-action). **"1.5" satıcı tarafından unutulmuş** — kullanıcının
+   orijinal şikâyetinin gerçek kökü bu. (İlk keşif taraması `tr.com.havelsan`
+   ağacına bakmıştı; kontrol `tr.gov.uyap` ağacında.)
+   Her öğenin dinleyicisi (N=1.0, O=1.15, P=2.0, Q=2.5, R=3.0) tek satır:
+   `M.a(this.a)` (M→D erişimcisi) → **`D.a(float görünenDeğer)`** — satıcının
+   kendi uygulama yolu.
+2. Bizim ayrı butonumuz `AbstractCommandButton.setToolTipText`'in koşulsuz
+   `UnsupportedOperationException("Use rich tooltip APIs")` fırlatması
+   nedeniyle hiç eklenmiyordu (plan kodu hatası); düzeltilse bile bantta
+   İKİ satır-aralığı kontrolü olacaktı.
+
+**Yeni tasarım (kullanıcı seçimi):** ayrı buton İPTAL (Task 1-3 commit'leri
+geri alınır); yerine **build-zamanı Javassist yaması** `LineSpacingPatch`:
+`M` kurucusunda 3. `addMenuButton` ("2.0" öğesi) çağrısından önce
+`JCommandMenuButton("1.5", null)` + dinleyici eklenir; dinleyici, "1.15"
+dinleyicisi `O`'nun `getAndRename` kopyası (`LS15`, aynı pakette) olup
+gövdesi `M.a(this.a).a(1.5f)` — satıcının kendi uygulama yolu (undo/seçim
+mantığı dahil) aynen kullanılır. Native kontrolün kendi simgesi korunur
+(kullanıcının simge isteği kendiliğinden karşılanır). Görünüm native ile
+tutarlı: nokta biçimi "1.5". `LINESPACING=1` bayrağı bu yamayı gate'ler.
+UDF tarafı değişmedi (LineSpacing float, değer−1 — D.a satıcı yolu bunu
+kendisi yapar). Aşağıdaki orijinal tasarım TARİHSEL bağlamdır.
+
+---
 
 ## Problem
 
