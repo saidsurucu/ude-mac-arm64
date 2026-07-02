@@ -1,7 +1,7 @@
 # Satır Aralığı Dropdown'u (LINESPACING=1) — Tasarım
 
 **Tarih:** 2026-07-02
-**Durum:** REVİZE EDİLDİ (aşağıya bak) — orijinal ayrı-buton tasarımı geri alındı
+**Durum:** UYGULANDI (2026-07-02, revize tasarımla — native popup'a 1.5; kullanıcı GUI doğrulaması bekleniyor). Orijinal ayrı-buton tasarımı geri alındı.
 
 ## REVİZYON (2026-07-02/2, kullanıcı onaylı): native popup'a 1.5 ekle
 

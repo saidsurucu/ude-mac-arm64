@@ -1006,6 +1006,39 @@ Blast radius yalnız PDF dışa aktarımı; diğer kaydetme/imza yolları dokunu
 `lo.a:(Ljava/io/OutputStream;Z)V` + `iconst_1` çağırdığı görüldü; GUI testi (değişiklik
 yap → doğrudan PDF → son hâl gelmeli) kullanıcıya bırakıldı.
 
+## Satır aralığı 1.5 (LINESPACING=1, 2026-07)
+
+UDE'nin Giriş>Paragraf bandındaki NATIVE satır-aralığı popup'ı
+(`tr.gov.uyap.system.a.b.a.a.D` buton → `…a.a.M extends JCommandPopupMenu`)
+"1.0, 1.15, 2.0, 2.5, 3.0" içerir — **1.5 satıcı tarafından unutulmuş**
+(kullanıcı şikâyetinin gerçek kökü). İlk taramanın kaçırma nedeni: kontrol
+`tr.com.havelsan` değil **`tr.gov.uyap`** ağacında.
+`scripts/macos-linespacing/LineSpacingPatch.java` (Javassist, pdffresh deseni;
+`apply_linespacing`) M kurucusunda 3. `addMenuButton` ("2.0") öncesine "1.5"
+öğesi enjekte eder; dinleyici `LS15` = "1.15" dinleyicisi `O`'nun
+`getAndRename` BYTECODE kopyası (aynı pakette), `D.a(F)` çağrısı ExprEditor
+`$0.a(1.5f)` ile değiştirilir → satıcının kendi uygulama yolu `D.a(float)`
+(display−1 dönüşümü + undo/seçim orada). UDF `LineSpacing` float zaten
+destekler (parser `common.d.G/d.B` getFloatValue; Paragraf diyaloğu `gui.cM`
+serbest alanı 1,5 kabul eder) — **format değişikliği YOK**. İdempotans: LS15
+jar'da varsa atlanır.
+
+- **KRİTİK Javassist tuzağı — pakette `a` adlı SINIF da var**
+  (`tr/gov/uyap/system/a/b/a/a.class`): bu paketin sınıfları Javassist KAYNAK
+  dizgisinde (setBody/replace/make) FQCN ile ANILAMAZ — çözümleyici
+  `…a.b.a.a`'yı sınıf sanıp `a$M` arar → CannotCompile. İzinli yollar: $0
+  tabanlı çağrı yeniden yazımı (tip çağrı yerinden gelir), getAndRename
+  bytecode kopyası, string-literal `Class.forName` + yansıma
+  (`tr.lsinject.LsInject.make(Object)` fabrikası bu yüzden var; tüm çıktılar
+  `tr/` altında → `zip -r tr` kapsar).
+- **Flamingo tuzağı:** `AbstractCommandButton.setToolTipText` KOŞULSUZ
+  `UnsupportedOperationException("Use rich tooltip APIs")` fırlatır — ribbon'a
+  Flamingo butonu eklerken setToolTipText ÇAĞIRMA (footnote deseni de
+  çağırmaz). İlk yaklaşım (ayrı JCommandButton + agent, Task 1-3) bu yüzden
+  sessizce hiç kurulmadı; native kontrol keşfedilince revert edildi
+  (`a9d16d3`) — canlı popup içeriğiyle bytecode string'lerini karşılaştırmak
+  kök teşhisi verdi.
+
 ## Teşhis cephaneliği
 
 - **Yamasız uygulamaya agent takma:** `JAVA_TOOL_OPTIONS=-javaagent:/tmp/dbg.jar` —
