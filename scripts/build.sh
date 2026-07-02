@@ -47,6 +47,7 @@ LIVETOGGLE_SRC="$SCRIPT_DIR/macos-livetoggle" # otomatik düzeltme seçenekleri 
 ANTET_SRC="$SCRIPT_DIR/antet" # Antetlerim: arka plan diyaloğunda kişisel antet bölümü
 CARET_SRC="$SCRIPT_DIR/macos-caret"     # metin imleci temiz 1px çizim yaması
 PDFFRESH_SRC="$SCRIPT_DIR/macos-pdffresh" # PDF dışa aktarımı canlı belgeden taze serialize (bayat önbellek düzeltmesi)
+LINESPACING_SRC="$SCRIPT_DIR/macos-linespacing" # native satır aralığı menüsüne 1.5 ekleyen yama
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
@@ -62,6 +63,7 @@ PASTERICH="${PASTERICH:-1}" # 1=açık (varsayılan; harici stilli yapıştırma
 PLAINPASTE="${PLAINPASTE:-1}" # 1=açık (varsayılan; Formatsız Yapıştır ⌘⇧V + sağ tık; PASTERICH'e bağlı) | 0=kapalı
 CARETFIX="${CARETFIX:-1}" # 1=açık (varsayılan; metin imleci temiz 1px çizim, harf gövdesine binmez) | 0=kapalı
 PDFFRESH="${PDFFRESH:-1}" # 1=açık (varsayılan; "PDF Olarak Kaydet" canlı belgeden taze serialize — "önce Kaydet" gereksinimi kalkar) | 0=kapalı
+LINESPACING="${LINESPACING:-1}" # 1=açık (varsayılan; Giriş>Paragraf satır aralığı menüsüne 1.5 eklenir — satıcı unutmuş) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
 APP="$BUILD/$APP_NAME.app"
@@ -466,6 +468,27 @@ apply_pdffresh() {  # $1=JAR — patch_jar içinden çağrılır
 	fi
 }
 
+apply_linespacing() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$LINESPACING" = "1" ] || return 0
+	c_info "[linespacing] satır aralığı menüsüne 1.5 ekleniyor (satıcı unutmuş)…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[linespacing] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[linespacing] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (ortak)
+	rm -rf "$BUILD/_lspatch"; mkdir -p "$BUILD/_lspatch/out"
+	"$jc" --release 11 -cp "$jvs" -d "$BUILD/_lspatch" "$LINESPACING_SRC/LineSpacingPatch.java" \
+		|| { c_warn "[linespacing] LineSpacingPatch derlenemedi; yama atlandı."; return 0; }
+	"$jr" -cp "$BUILD/_lspatch:$jvs" LineSpacingPatch "$JAR" "$BUILD/_lspatch/out" \
+		|| die "[linespacing] 1.5 yaması uygulanamadı (UDE sürümü değişmiş olabilir)."
+	if [ -d "$BUILD/_lspatch/out/tr" ]; then
+		( cd "$BUILD/_lspatch/out" && zip -q -r "$JAR" tr )
+		c_ok "[linespacing] satır aralığı menüsüne 1.5 eklendi."
+	else
+		c_ok "[linespacing] zaten yamalı, atlandı."
+	fi
+}
+
 apply_imagefull() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$IMGFULL" = "1" ] || return 0
@@ -762,6 +785,7 @@ patch_jar() {
 	apply_filedialog "$JAR"
 	apply_caretfix "$JAR"
 	apply_pdffresh "$JAR"
+	apply_linespacing "$JAR"
 	apply_imagefull "$JAR"
 	apply_pasteimage "$JAR"
 	apply_pasterich "$JAR"
@@ -954,6 +978,7 @@ case "${1:-all}" in
 	fop-fonts) apply_fop_fonts "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	caret-fix) CARETFIX=1 apply_caretfix "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	pdf-fresh) PDFFRESH=1 apply_pdffresh "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	line-spacing) LINESPACING=1 apply_linespacing "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-rich) apply_pasterich "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
