@@ -150,11 +150,26 @@ icon_deps() {  # Javassist (build-time ikon yükleyici yaması için)
 	echo "$jvs"
 }
 
-install_zulu() {  # $1=java_version  $2=hedef .jdk
+install_zulu() {  # $1=java_version  $2=hedef .jdk  $3=istenen özellik (ops., ör. "shenandoah")
 	c_info "Azul Zulu $1 ($AZUL_ARCH) indiriliyor…"
-	local url
-	url="$(curl -s "${CURL_NET[@]}" "https://api.azul.com/metadata/v1/zulu/packages/?java_version=$1&os=macos&arch=$AZUL_ARCH&archive_type=tar.gz&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&page=1&page_size=1" \
-		| /usr/bin/python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["download_url"])')"
+	local feat="${3:-}" url=""
+	# Önce istenen özelliği (varsa) Azul'un API'sinden doğrudan iste: "en güncel" build
+	# zamanla değişip özelliği içermeyen bir alt-derlemeye kayabiliyor (bkz. Shenandoah GC
+	# sorunu); features= filtresi bunu garanti eder. Boş dönerse (API değişmiş/özellik o an
+	# yok) süzgeçsiz sorguya düş — build yine de devam eder (package() runtime'ı ayrıca test eder).
+	if [ -n "$feat" ]; then
+		url="$(curl -s "${CURL_NET[@]}" "https://api.azul.com/metadata/v1/zulu/packages/?java_version=$1&os=macos&arch=$AZUL_ARCH&archive_type=tar.gz&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&features=$feat&page=1&page_size=1" \
+			| /usr/bin/python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["download_url"] if d else "")' 2>/dev/null)"
+		if [ -n "$url" ]; then
+			c_ok "Zulu $1 ($feat özellikli derleme bulundu)."
+		else
+			c_warn "Zulu $1 için '$feat' özellikli derleme bulunamadı; süzgeçsiz aramaya düşülüyor."
+		fi
+	fi
+	if [ -z "$url" ]; then
+		url="$(curl -s "${CURL_NET[@]}" "https://api.azul.com/metadata/v1/zulu/packages/?java_version=$1&os=macos&arch=$AZUL_ARCH&archive_type=tar.gz&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&page=1&page_size=1" \
+			| /usr/bin/python3 -c 'import sys,json;d=json.load(sys.stdin);print(d[0]["download_url"])')"
+	fi
 	[ -n "$url" ] || die "Zulu $1 URL'si alınamadı."
 	mkdir -p "$DOWNLOADS"; local tmp="$DOWNLOADS/zulu$1.tgz"
 	curl -fSL "${CURL_NET[@]}" -o "$tmp" "$url"
@@ -182,7 +197,7 @@ check_deps() {
 
 jdk() {
 	[ -n "$(jdk11_home)" ] && { c_ok "$JH_ARCH Java 11 zaten kurulu."; return 0; }
-	install_zulu 11 "$JDK11_DEST"
+	install_zulu 11 "$JDK11_DEST" shenandoah
 	[ -n "$(jdk11_home)" ] && c_ok "Kuruldu: $JDK11_DEST" || die "Java 11 kurulum sonrası görünmüyor."
 }
 
@@ -808,6 +823,21 @@ package() {
 	local rt; rt="$(jdk11_home)"; [ -n "$rt" ] || die "Java 11 yok → scripts/build.sh jdk"
 	[ -f "$rt/lib/jli/libjli.dylib" ] || die "Java 11 runtime layout farklı: $rt"
 
+	# Shenandoah GC bazı Zulu 11 alt-derlemelerinde (Azul'un "en güncel" API'si zamanla
+	# farklı bir build döndürebiliyor) yok; varsa hızlı/düşük-duraklamalı GC olarak
+	# etkinleştir, yoksa JVM "Unrecognized VM option" ile açılışta çökeceğine varsayılan
+	# GC'ye (G1) sessizce düş. Gömülecek runtime'ın kendisiyle test edilir.
+	local shen_opts=()
+	if "$rt/bin/java" -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -version >/dev/null 2>&1; then
+		shen_opts=(--java-options -XX:+UnlockExperimentalVMOptions \
+			--java-options -XX:+UseShenandoahGC \
+			--java-options -XX:ShenandoahUncommitDelay=10000 \
+			--java-options -XX:ShenandoahGuaranteedGCInterval=120000)
+		c_ok "Shenandoah GC destekleniyor, etkinleştirildi."
+	else
+		c_warn "Bu Java 11 runtime'ı Shenandoah GC desteklemiyor; varsayılan GC (G1) kullanılacak."
+	fi
+
 	c_info "jpackage girdisi hazırlanıyor…"
 	local JAVA="$SRC_APP_DIR/app/Contents/Java"
 	local in="$BUILD/_input"; rm -rf "$in"; mkdir -p "$in"
@@ -860,10 +890,7 @@ package() {
 		${tropts[@]+"${tropts[@]}"} \
 		--java-options '-Dsun.security.smartcardio.library=/System/Library/Frameworks/PCSC.framework/Versions/A/PCSC' \
 		--java-options -Xms128M --java-options -Xmx4096M \
-		--java-options -XX:+UnlockExperimentalVMOptions \
-		--java-options -XX:+UseShenandoahGC \
-		--java-options -XX:ShenandoahUncommitDelay=10000 \
-		--java-options -XX:ShenandoahGuaranteedGCInterval=120000 \
+		${shen_opts[@]+"${shen_opts[@]}"} \
 		--java-options '-splash:$APPDIR/dokuman_editor_splash_screen_animated.gif' \
 		${icns:+--icon "$icns"} \
 		--mac-package-identifier "$BUNDLE_ID" --file-associations "$assoc" \
