@@ -81,6 +81,17 @@ yoktur.)
 **Yeni Editör sürümü çıktığında yukarıdaki tek satırı yeniden çalıştırmanız yeterli. En
 güncel sürüm otomatik inecek ve yamalanacak.**
 
+### 🎨 Eski (klasik) arayüzü kurmak isterseniz
+
+Yukarıdaki komut varsayılan olarak **modern düz görünümü** (10. maddede anlatılan) kurar.
+Eski turkuaz arayüzü tercih ediyorsanız, aynı satırın başına `SKIN=0 ` ekleyin:
+
+```bash
+SKIN=0 arch -arm64 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
+```
+
+Depoyu zaten indirdiyseniz, klasörün içinde `./kur.sh --klasik` de aynı işi yapar.
+
 ## 💻 Intel işlemcili Mac'ler için
 
 Mac'iniz Intel (x86_64) işlemcili ise — yani Apple Silicon (M1/M2/M3/M4) **değilse** —
