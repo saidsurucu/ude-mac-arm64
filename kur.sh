@@ -7,10 +7,9 @@
 # sırayla yapar. Programcı olmanıza gerek yok.
 #
 # İki şekilde çalışır:
-#   • İnternetten tek satırla (Apple Silicon):
-#       arch -arm64 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
-#     Intel'de:
+#   • İnternetten tek satırla (Apple Silicon ve Intel, aynı komut):
 #       bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
+#     (Terminal Rosetta modundaysa betik kendini arm64 olarak yeniden başlatır)
 #     (kaynak kodu kendisi indirir, derler ve kurar)
 #   • Depoyu zaten indirdiyseniz, klasörün içinde:  ./kur.sh
 #
@@ -53,30 +52,61 @@ ensure_clt() {
 	ok "Komut satırı araçları kuruldu"
 }
 
+# ----- "sudo ./kur.sh" ile başlatıldıysa normal kullanıcıya dön -----
+# Root olarak yazılan kaynak kod/önbellek kullanıcının ev dizininde root'a ait
+# kalır ve sonraki (sudo'suz) kurulum "Permission denied" ile düşer. Yönetici
+# izni yalnızca /Applications adımında, gerektiği anda isteniyor.
+if [ "$(id -u)" = "0" ]; then
+	SRC0="${BASH_SOURCE[0]:-}"
+	if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ] && [ -f "$SRC0" ]; then
+		warn "Kurulum 'sudo' ile başlatıldı; normal kullanıcı ($SUDO_USER) olarak devam ediliyor."
+		exec sudo -u "$SUDO_USER" -H /bin/bash "$(cd "$(dirname "$SRC0")" && pwd)/$(basename "$SRC0")"
+	fi
+	die "Bu kurulumu 'sudo' ile çalıştırmayın. Normal kullanıcı olarak: ./kur.sh"
+fi
+
 # ----- 0) Ortam kontrolü -----
-# Mimari otomatik: arm64 (Apple Silicon) ya da x86_64 (Intel) kabul edilir. Yalnız
-# Apple Silicon'da Rosetta terminali (proc_translated=1) reddedilir; orada x86_64
-# üretmek yanlış olur (Mac aslında arm64).
+# Mimari otomatik: arm64 (Apple Silicon) ya da x86_64 (Intel) kabul edilir.
+# Apple Silicon'da Rosetta terminali (proc_translated=1) kabul edilmez — orada
+# x86_64 üretmek yanlış olur (Mac aslında arm64); bu durumda betik kendini
+# arm64 olarak yeniden başlatır.
 step "Ortam denetimi"
 [ "$(uname -s)" = "Darwin" ] || die "Bu betik yalnızca macOS içindir."
 ARCH="$(uname -m)"
+ARCH_SWITCH=0
 case "$ARCH" in
 	arm64)
 		ok "Apple Silicon Mac algılandı"
 		;;
 	x86_64)
-		if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = "1" ]; then
-			die "Terminaliniz Rosetta (x86_64) modunda çalışıyor; Mac'iniz Apple Silicon olsa da betik bunu göremiyor.
-  Çözüm 1 — komutu arm64 zorlayarak çalıştırın:
-    ${BOLD}arch -arm64 bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)\"${RST}
-  Çözüm 2 — Terminal'in ${BOLD}Bilgi Al${RST} (⌘I) penceresinde ${BOLD}\"Rosetta kullanarak aç\"${RST} işaretini kaldırıp terminali yeniden açın."
+		# Rosetta terminali: Mac aslında Apple Silicon; x86_64 üretmek yanlış olur.
+		# Elle "arch -arm64" yazdırmak yerine betiği arm64 olarak yeniden başlatıyoruz.
+		if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = "1" ] \
+		   || [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = "1" ]; then
+			if [ "${KUR_ARCH_SWITCHED:-0}" != "1" ] && command -v arch >/dev/null 2>&1; then
+				warn "Terminal Rosetta (x86_64) modunda; otomatik olarak arm64'e geçilecek."
+				ARCH_SWITCH=1
+			else
+				die "Terminaliniz Rosetta (x86_64) modunda çalışıyor ve arm64'e geçilemedi.
+  Terminal'in ${BOLD}Bilgi Al${RST} (⌘I) penceresinde ${BOLD}\"Rosetta kullanarak aç\"${RST} işaretini kaldırıp terminali yeniden açın."
+			fi
+		else
+			ok "Intel Mac algılandı"
 		fi
-		ok "Intel Mac algılandı"
 		;;
 	*)
 		die "Desteklenmeyen mimari: $ARCH (yalnız arm64 / x86_64)."
 		;;
 esac
+
+# Rosetta terminalinde başlatıldıysak betiği arm64 olarak yeniden başlatırız.
+# (Hemen yapamıyoruz: "curl | bash" ile çalıştırıldığında yeniden başlatılacak
+#  bir dosya henüz diskte yok — kaynak kod indikten sonra çağrılıyor.)
+reexec_arm64() {
+	say "arm64 mimarisine geçiliyor…"
+	export KUR_ARCH_SWITCHED=1
+	exec arch -arm64 /bin/bash "$1"
+}
 
 # ----- Önyükleme: depo klasörünün içinde miyiz? -----
 # curl ... | bash ile çalıştırıldığında BASH_SOURCE boş/geçersiz olur; bu durumda
@@ -101,10 +131,14 @@ if [ -z "$SCRIPT_DIR" ] || [ ! -f "$SCRIPT_DIR/scripts/build.sh" ]; then
 	fi
 	ok "Kaynak kod hazır"
 	# İndirilen depodaki kur.sh'yi devral (bu noktadan sonrasını o yürütür).
+	if [ "$ARCH_SWITCH" = "1" ]; then reexec_arm64 "$CLONE_DIR/kur.sh"; fi
 	exec bash "$CLONE_DIR/kur.sh"
 fi
 
 cd "$SCRIPT_DIR"
+
+# Kaynak kod diskte; Rosetta terminalinden geldiysek burada arm64'e geçiyoruz.
+if [ "$ARCH_SWITCH" = "1" ]; then reexec_arm64 "$SCRIPT_DIR/kur.sh"; fi
 
 APP_NAME="Uyap Doküman Editörü.app"
 BUILT_APP="$SCRIPT_DIR/build/$APP_NAME"

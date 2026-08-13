@@ -59,8 +59,11 @@ Programcı olmanıza gerek yok. **Terminal** uygulamasını açın (klavyede
 ardından aşağıdaki **tek satırı** kopyalayıp yapıştırın ve **Enter**'a basın:
 
 ```bash
-arch -arm64 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
 ```
+
+> Terminal'iniz Rosetta (x86_64) modunda açılmışsa betik bunu algılayıp kendini
+> otomatik olarak arm64'e geçirir — artık `arch -arm64` yazmanıza gerek yoktur.
 
 Hepsi bu kadar. Manuel indirme, klasöre girme, Java kurma gibi adımlar **yok**. Bu komut
 gerisini sizin için yapar:
@@ -84,8 +87,7 @@ güncel sürüm otomatik inecek ve yamalanacak.**
 ## 💻 Intel işlemcili Mac'ler için
 
 Mac'iniz Intel (x86_64) işlemcili ise — yani Apple Silicon (M1/M2/M3/M4) **değilse** —
-aynı kurulumu şu **tek satırla** yapın (Apple Silicon'dakinin aksine `arch -arm64`
-**yoktur**; Intel zaten yalnız x86_64'tür):
+aynı kurulumu **birebir aynı tek satırla** yapın (mimariyi betik kendisi algılar):
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
