@@ -33,6 +33,10 @@ for _arg in "$@"; do
 	esac
 done
 SKIN="${SKIN:-1}"
+# EXPORT şart: betik kendini iki kez devredebiliyor (indirilen kopyaya `exec bash`,
+# Rosetta kabuğunda `exec arch -arm64`). Ortama koymazsak, seçim yalnız argümanla
+# verildiğinde (`./kur.sh --klasik`) devirde kaybolur ve modern görünüm kurulur.
+export SKIN
 
 # ----- Renkli, anlaşılır mesajlar -----
 if [ -t 1 ]; then
@@ -119,7 +123,8 @@ esac
 reexec_arm64() {
 	say "arm64 mimarisine geçiliyor…"
 	export KUR_ARCH_SWITCHED=1
-	exec arch -arm64 /bin/bash "$1"
+	local script="$1"; shift
+	exec arch -arm64 /bin/bash "$script" ${1+"$@"}
 }
 
 # ----- Önyükleme: depo klasörünün içinde miyiz? -----
@@ -152,7 +157,7 @@ fi
 cd "$SCRIPT_DIR"
 
 # Kaynak kod diskte; Rosetta terminalinden geldiysek burada arm64'e geçiyoruz.
-if [ "$ARCH_SWITCH" = "1" ]; then reexec_arm64 "$SCRIPT_DIR/kur.sh"; fi
+if [ "$ARCH_SWITCH" = "1" ]; then reexec_arm64 "$SCRIPT_DIR/kur.sh" ${1+"$@"}; fi
 
 APP_NAME="Uyap Doküman Editörü.app"
 BUILT_APP="$SCRIPT_DIR/build/$APP_NAME"
