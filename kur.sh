@@ -13,12 +13,26 @@
 #     (kaynak kodu kendisi indirir, derler ve kurar)
 #   • Depoyu zaten indirdiyseniz, klasörün içinde:  ./kur.sh
 #
+# Görünüm seçimi (varsayılan: modern düz görünüm):
+#   • Eski/klasik (turkuaz) arayüz için SKIN=0 ortam değişkenini önden verin:
+#       SKIN=0 arch -arm64 bash -c "$(curl -fsSL https://raw.githubusercontent.com/saidsurucu/ude-mac-arm64/main/kur.sh)"
+#   • Depoyu indirdiyseniz aynı şey bayrakla da olur:  ./kur.sh --klasik
+#
 # Asıl derleme mantığı scripts/build.sh içindedir; bu betik onu sarmalar.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/saidsurucu/ude-mac-arm64.git"
 CLONE_DIR="$HOME/ude-mac-arm64"
+
+# ----- Görünüm seçimi: --klasik/--eski bayrağı SKIN=0'a eşdeğerdir -----
+# (curl | bash tek-satırında bayrak yerine "SKIN=0 <komut>" kullanılır; ikisi de kabul edilir.)
+for _arg in "$@"; do
+	case "$_arg" in
+		--klasik|--eski|--classic) SKIN=0 ;;
+	esac
+done
+SKIN="${SKIN:-1}"
 
 # ----- Renkli, anlaşılır mesajlar -----
 if [ -t 1 ]; then
@@ -131,8 +145,8 @@ if [ -z "$SCRIPT_DIR" ] || [ ! -f "$SCRIPT_DIR/scripts/build.sh" ]; then
 	fi
 	ok "Kaynak kod hazır"
 	# İndirilen depodaki kur.sh'yi devral (bu noktadan sonrasını o yürütür).
-	if [ "$ARCH_SWITCH" = "1" ]; then reexec_arm64 "$CLONE_DIR/kur.sh"; fi
-	exec bash "$CLONE_DIR/kur.sh"
+	if [ "$ARCH_SWITCH" = "1" ]; then reexec_arm64 "$CLONE_DIR/kur.sh" ${1+"$@"}; fi
+	exec bash "$CLONE_DIR/kur.sh" ${1+"$@"}
 fi
 
 cd "$SCRIPT_DIR"
@@ -159,7 +173,12 @@ make jpackage-jdk
 
 # ----- 4) Derle + modern ikonlarla paketle + imzala -----
 step "Derleme + paketleme (birkaç dakika sürebilir)"
-ICONS=1 make all
+if [ "$SKIN" = "0" ]; then
+	say "Görünüm: klasik (eski turkuaz arayüz) — SKIN=0"
+else
+	say "Görünüm: modern düz arayüz (varsayılan). Klasik istiyorsanız: SKIN=0 ile çalıştırın ya da ./kur.sh --klasik"
+fi
+SKIN="$SKIN" ICONS=1 make all
 [ -d "$BUILT_APP" ] || die "Beklenen uygulama üretilemedi: $BUILT_APP"
 ok "Uygulama hazır: $BUILT_APP"
 
