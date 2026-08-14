@@ -231,7 +231,10 @@ download() {
 	# diye komutu tekrar çalıştıran kullanıcı sessizce eski sürümü yeniden paketlerdi.
 	local stamp="$DOWNLOADS/ude.url" url=""
 	if [ -s "$UDE_ZIP" ]; then
-		url="$(resolve_ude_url 2>/dev/null || true)"   # ağ yoksa boş → önbellekle devam
+		# Ağ/sayfa yoksa boş kalsın → önbellekle devam. resolve_ude_url içindeki die
+		# alt kabuğu ANINDA sonlandırır ("… || true" içeride İŞLEMEZ) → atamanın
+		# çıkış kodunu DIŞARIDA yakala, yoksa set -e build'i sessizce düşürür.
+		url="$(resolve_ude_url 2>/dev/null)" || url=""
 		if [ -n "$url" ] && [ "$url" != "$(cat "$stamp" 2>/dev/null)" ]; then
 			c_info "Yeni UDE paketi bulundu; önbellek yenileniyor."
 			rm -f "$UDE_ZIP"
