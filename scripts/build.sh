@@ -201,14 +201,20 @@ latest_ude_version() {
 		| head -1
 }
 
-# Resmî indirme sayfasından güncel MAC paketinin (uyapdokumaneditoru*.zip) URL'sini çözer.
+# Resmî indirme sayfasından güncel MAC (Apple Silicon) paketinin URL'sini çözer.
+# 2026-08 / 5.4.19: satıcı adlandırmayı değiştirdi —
+#   eski: .../uyapdokumaneditoru…zip  (tek MAC paketi, küçük harf)
+#   yeni: .../UyapDokumanEditoru-AppleSilicon-5.4.19.zip  +  …-Intel-5.4.19.zip
+# Bu yüzden arama büyük/küçük harf DUYARSIZ ve Intel paketi elenir.
 resolve_ude_url() {
 	[ -n "$UDE_URL" ] && { echo "$UDE_URL"; return 0; }
 	c_info "Güncel MAC paketi çözülüyor: $UDE_DOWNLOAD_PAGE" >&2
-	local href
-	href="$(curl -fsSL "${CURL_NET[@]}" -m 30 "$UDE_DOWNLOAD_PAGE" 2>/dev/null \
-		| grep -aoE '(https?:)?//rayp\.adalet\.gov\.tr/[^"'"'"' >]*uyapdokumaneditoru[^"'"'"' >]*\.zip' \
-		| head -1)"
+	local links href
+	links="$(curl -fsSL "${CURL_NET[@]}" -m 30 "$UDE_DOWNLOAD_PAGE" 2>/dev/null \
+		| grep -aoiE '(https?:)?//rayp\.adalet\.gov\.tr/[^"'"'"' >]*uyapdokumaneditoru[^"'"'"' >]*\.zip')"
+	# Önce açıkça Apple Silicon; yoksa Intel/x86 OLMAYAN ilk MAC paketi (eski tek-paket düzeni).
+	href="$(printf '%s\n' "$links" | grep -iE 'applesilicon|arm64|aarch64' | head -1)"
+	[ -n "$href" ] || href="$(printf '%s\n' "$links" | grep -ivE 'intel|x86|x64|amd64' | head -1)"
 	[ -n "$href" ] || die "Güncel MAC paketi indirme sayfasında bulunamadı (sayfa yapısı değişmiş olabilir). UDE_URL ile elle verebilirsiniz."
 	case "$href" in
 		//*)  href="https:$href" ;;
@@ -220,12 +226,24 @@ resolve_ude_url() {
 download() {
 	c_info "Kaynak paket hazırlanıyor…"
 	mkdir -p "$DOWNLOADS" "$BUILD"
+	# Önbellek SÜRÜM-duyarlıdır: indirilen paketin URL'si damgalanır; sayfadaki güncel
+	# paket URL'si değişmişse (yeni UDE sürümü) eski zip atılır. Aksi halde "güncelle"
+	# diye komutu tekrar çalıştıran kullanıcı sessizce eski sürümü yeniden paketlerdi.
+	local stamp="$DOWNLOADS/ude.url" url=""
+	if [ -s "$UDE_ZIP" ]; then
+		url="$(resolve_ude_url 2>/dev/null || true)"   # ağ yoksa boş → önbellekle devam
+		if [ -n "$url" ] && [ "$url" != "$(cat "$stamp" 2>/dev/null)" ]; then
+			c_info "Yeni UDE paketi bulundu; önbellek yenileniyor."
+			rm -f "$UDE_ZIP"
+		fi
+	fi
 	if [ -s "$UDE_ZIP" ]; then
 		c_ok "Önbellekten: $UDE_ZIP ($(du -h "$UDE_ZIP" | cut -f1))"
 	else
 		local lv; lv="$(latest_ude_version)"
 		[ -n "$lv" ] && c_info "UDE'nin bildirdiği güncel sürüm: $lv"
-		UDE_URL="$(resolve_ude_url)"
+		[ -n "$url" ] || url="$(resolve_ude_url)"
+		UDE_URL="$url"
 		c_info "İndiriliyor: $UDE_URL"
 		# Önce .part'a indir, zip bütünlüğünü doğrula, sonra taşı. Böylece HTTP/2 akış
 		# kesilmesi yarım bir dosya bırakırsa, sonraki çalıştırma onu "önbellek" sanıp
@@ -236,16 +254,56 @@ download() {
 		unzip -tq "$tmp" >/dev/null 2>&1 \
 			|| { rm -f "$tmp"; die "İndirilen paket bozuk (indirme yarıda kalmış olabilir). Komutu tekrar çalıştırın."; }
 		mv -f "$tmp" "$UDE_ZIP"
+		printf '%s\n' "$UDE_URL" > "$stamp"
 	fi
 	rm -rf "$SRC_APP_DIR"; mkdir -p "$SRC_APP_DIR"
 	local stage; stage="$(mktemp -d)"
-	( cd "$stage" && unzip -q "$UDE_ZIP" )
+	# 5.4.19'dan itibaren paket kendi zulu-8.jre'sini de taşıyor (~180MB); biz
+	# kendi Java 11 runtime'ımızla paketlediğimiz için PlugIns'i hiç açmayız.
+	( cd "$stage" && unzip -q "$UDE_ZIP" -x '*/Contents/PlugIns/*' )
 	local src; src="$(find "$stage" -maxdepth 1 -type d -name '*.app' | head -1)"
 	[ -n "$src" ] || die "Zip içinde .app yok."
 	cp -R "$src" "$SRC_APP_DIR/app"; rm -rf "$stage"
 	find "$SRC_APP_DIR" -name '._*' -delete 2>/dev/null || true
+	merge_editor_jars "$SRC_APP_DIR/app"
 	[ -s "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ] || die "editor-app.jar yok."
 	c_ok "Kaynak açıldı."
+}
+
+# 5.4.19'dan itibaren satıcı tek "editor-app.jar"ı yediye böldü (Info.plist
+# JVMClassPath: editor_laf, editor_lib, editor_lib2, editor_utility, jai_hvl,
+# jdom, updater). Tüm yamalarımız tek jar varsayar → sınıf yolu SIRASIYLA
+# (ilk gelen kazanır = JVM'in kendi davranışı) yeniden birleştirip
+# editor-app.jar üretiriz. Kontrol edildi (5.4.19): jar'lar imzasız,
+# META-INF/services dosyaları çakışmıyor, çakışan tek şey commons-io kopyası.
+# Sınıf adları 5.4.17 ile birebir aynı → obfuscate hedefler değişmedi.
+merge_editor_jars() {
+	local app="$1"; local java="$app/Contents/Java"
+	[ -s "$java/editor-app.jar" ] && return 0
+	local order others j
+	order="$(plutil -extract JVMClassPath json -o - "$app/Contents/Info.plist" 2>/dev/null \
+		| sed 's/\\\//\//g' | tr ',' '\n' \
+		| sed -n 's|.*Contents/Java/\([A-Za-z0-9_.-]*\.jar\).*|\1|p')"
+	[ -n "$order" ] || order="editor_laf.jar editor_lib.jar editor_lib2.jar editor_utility.jar jai_hvl.jar jdom.jar updater.jar"
+	# Info.plist'te anılmayan jar kalırsa (satıcı yeni jar eklerse) sona ekle.
+	others=""
+	for j in "$java"/*.jar; do
+		[ -e "$j" ] || continue
+		case " $(printf '%s ' $order)" in *" $(basename "$j") "*) ;; *) others="$others $(basename "$j")" ;; esac
+	done
+	local list; list="$(printf '%s ' $order $others)"
+	c_info "editor-app.jar birleştiriliyor:$(printf ' %s' $list)"
+	# KRİTİK: zip→zip birleştirilir, diske AÇILMAZ — macOS dosya sistemi büyük/küçük
+	# harf duyarsız, obfuscate adlarda 889 çakışma var (kx/kX) → unzip 846 sınıfı
+	# sessizce yerdi (ölçüldü). Ayrıntı: scripts/merge-jars.py
+	local args=() n
+	for j in $list; do [ -s "$java/$j" ] && args+=("$java/$j"); done
+	n="$(/usr/bin/python3 "$ROOT/scripts/merge-jars.py" "$java/editor-app.jar.part" \
+		"$MAIN_CLASS" ${args[@]+"${args[@]}"})" || die "editor-app.jar birleştirilemedi."
+	mv -f "$java/editor-app.jar.part" "$java/editor-app.jar"
+	for j in $list; do [ "$j" = "editor-app.jar" ] || rm -f "$java/$j"; done
+	c_info "birleşik giriş sayısı: $n"
+	c_ok "editor-app.jar hazır ($(du -h "$java/editor-app.jar" | cut -f1))"
 }
 
 deps() {

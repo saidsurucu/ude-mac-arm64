@@ -20,6 +20,31 @@ bash scripts/build.sh download && bash scripts/build.sh patch \
   (`build/…app/Contents/MacOS/UyapDokumanEditoru`); `open` LaunchServices -54 verebilir
   ve eski süreç penceresi yanıltır.
 
+### Satıcı paket düzeni değişti (UDE 5.4.19, 2026-08)
+
+İki kırılma birden — ikisi de `download` adımında çözülür:
+
+1. **İndirme linki adlandırması**: `…/uyapdokumaneditoru*.zip` →
+   **`…/UyapDokumanEditoru-AppleSilicon-5.4.19.zip`** (+ `-Intel-`). Harf-duyarlı
+   `grep -aoE` hiç eşleşmiyordu → "indirme sayfasında bulunamadı". `resolve_ude_url`
+   artık `-i` ile arar ve **Apple Silicon** paketini seçer (Intel/x86 elenir).
+2. **Tek `editor-app.jar` YEDİYE bölündü**: `editor_laf, editor_lib, editor_lib2,
+   editor_utility, jai_hvl, jdom, updater` (+ pakete gömülü `zulu-8.jre` ~180MB, biz
+   PlugIns'i hiç açmayız). Tüm yamalar tek jar varsaydığı için `merge_editor_jars`
+   bunları **Info.plist `JVMClassPath` SIRASIYLA** tek `editor-app.jar`'a birleştirir;
+   aynı adlı girişte **ilk gelen kazanır** (JVM sınıf-yolu davranışının aynısı).
+   Doğrulandı (5.4.19): jar'lar imzasız, `META-INF/services` çakışmıyor, tek çakışma
+   commons-io kopyası; obfuscate sınıf **adları 5.4.17 ile birebir aynı** → hiçbir
+   Javassist hedefi değişmedi (tam build + 20 yama sorunsuz uygulandı).
+   - **KRİTİK:** birleştirme **zip→zip** olmalı (`scripts/merge-jars.py`), diske
+     AÇILMAMALI. macOS dosya sistemi harf-duyarsız; obfuscate adlarda **889 çakışma**
+     var (`kx`/`kX`) → `unzip` yolu **846 sınıfı sessizce yiyor** (24542 → 23696).
+     Bu, jar'ı javap için açarken bilinen tuzağın (aşağıda) build hattındaki ikizi.
+- **Önbellek artık sürüm-duyarlı**: indirilen paketin URL'si `downloads/ude.url`'e
+  damgalanır; sayfadaki güncel link değişmişse eski zip atılır. Eskiden "güncelle"
+  diye komutu tekrar çalıştıran kullanıcı sessizce ESKİ sürümü yeniden paketliyordu.
+  Ağ yoksa damga kontrolü sessizce atlanır (önbellekle devam).
+
 ## Görünüm mimarisi (SKIN=1)
 
 İki katman:
