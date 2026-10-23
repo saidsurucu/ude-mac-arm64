@@ -72,12 +72,50 @@ static void udeHideDocTitle(NSWindow *w) {
         [w setTitleVisibility:NSWindowTitleHidden];
 }
 
+/*
+ * Kaydetme/açma panelini belge penceresinin ÜSTÜNDE tut.
+ *
+ * Sorun: MacFileDialog paneli SAHİPSİZ açar (fullWindowContent'li sahibe bağlı
+ * panel hiç görünmüyordu). Sahipsiz panel daraltılmış (yeni kurulum varsayılanı)
+ * hâlde normal pencere katmanında (0) açılır; ana pencere sonradan öne gelince
+ * (format penceresi kapanırken sahibini etkinleştirmesi, kullanıcı tıklaması)
+ * panel 1296x829 belge penceresinin ARKASINA düşer. Panel modal olduğundan
+ * uygulama kilitlenir: kullanıcı ne paneli görür ne konum seçebilir (dynamic-
+ * attach probe'uyla frame.toFront() sonrası z-sırasıyla kanıtlandı).
+ *
+ * Çözüm: görünür, sheet olmayan her NSSavePanel'i (NSOpenPanel alt sınıfı)
+ * NSModalPanelWindowLevel'a çıkar. Ayrıca panel varsayılan olarak genişletilmiş
+ * (kenar çubuklu) açılsın: tercih YALNIZ uygulama alanında hiç yoksa yazılır
+ * (kullanıcının daraltma seçimi ezilmez). registerDefaults İŞE YARAMAZ —
+ * NSSavePanel kayıt alanını okumuyor (denendi, panel daraltılmış açıldı).
+ */
+static void udeRaiseFilePanel(NSWindow *w) {
+    if (w == nil || ![w isKindOfClass:[NSSavePanel class]]) return;
+    if ([w isSheet] || ![w isVisible]) return;
+    if ([w level] < NSModalPanelWindowLevel) {
+        [w setLevel:NSModalPanelWindowLevel];
+        [w orderFrontRegardless];
+    }
+}
+
 static void udeInstallTitleHider(void) {
-    [[NSNotificationCenter defaultCenter]
-        addObserverForName:NSWindowDidUpdateNotification
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
+    NSString *expKey = @"NSNavPanelExpandedStateForSaveMode";
+    if (bid != nil && [[ud persistentDomainForName:bid] objectForKey:expKey] == nil)
+        [ud setBool:YES forKey:expKey];
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+    [nc addObserverForName:NSWindowDidUpdateNotification
                     object:nil
                      queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification *n) { udeHideDocTitle((NSWindow *)[n object]); }];
+                usingBlock:^(NSNotification *n) {
+        udeHideDocTitle((NSWindow *)[n object]);
+        udeRaiseFilePanel((NSWindow *)[n object]);
+    }];
+    [nc addObserverForName:NSWindowDidBecomeKeyNotification
+                    object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *n) { udeRaiseFilePanel((NSWindow *)[n object]); }];
     for (NSWindow *w in [NSApp windows]) udeHideDocTitle(w);  // ilk tarama
 }
 

@@ -1209,6 +1209,26 @@ UDE uç noktadakinden ESKİYSE çıkar → kullanıcı raporu = bayat kaynak kod
 Satıcının iki kaynağı ayrışabilir: indirme sayfası 5.4.21 verirken uç nokta 5.4.20
 diyordu (build.sh "FARKLI" uyarısı zararsız; yeni paket eski uç noktayla diyalog ÜRETMEZ).
 
+## Kaydetme paneli belge penceresinin arkasına düşüyordu (2026-10)
+
+Kullanıcı raporları (birden çok kişi): "Farklı Kaydet'te format penceresinden sonra
+ekran kayboluyor / konum seçemiyorum". KÖK NEDEN: `MacFileDialog` paneli SAHİPSİZ açar
+(fullWindowContent'li sahibe bağlı panel hiç görünmüyordu, 2026-06). Sahipsiz panel
+**daraltılmış** hâlde (yeni kurulum varsayılanı, `NSNavPanelExpandedStateForSaveMode`
+yok) **katman 0**'da açılır; ana pencere sonradan öne gelince (format penceresinin
+sahibini yeniden etkinleştirmesi, tıklama) 370x206 panel 1296x829 belge penceresinin
+ARKASINA düşer → modal olduğu için uygulama kilitlenir. Geliştirici makinesinde
+görülmüyordu çünkü tercih Haziran'dan beri `1` (genişletilmiş panel katman 8'de
+açılıyordu). **Çözüm** (`NativeDialogKeys.m` → `udeRaiseFilePanel`): görünür, sheet
+olmayan her NSSavePanel → `NSModalPanelWindowLevel` (DidUpdate + DidBecomeKey);
+ayrıca tercih uygulama alanında YOKSA `YES` yazılır (kenar çubuklu panel; kullanıcının
+daraltma seçimi ezilmez). `registerDefaults` İŞE YARAMAZ — panel kayıt alanını okumuyor.
+Doğrulama: `defaults delete tr.gov.uyap.editor NSNavPanelExpandedStateForSaveMode` →
+probe ile save-as + format "Tamam" → attach ile `frame.toFront()` → CGWindowList z-sırası
+ve `kCGWindowLayer` (panel 8'de ve üstte kalmalı). TEXTKEYS bayrağına bağlıdır
+(dylib yoksa düzeltme de yok). Not: computer-use bu Java penceresinde tıklamayı
+reddediyor ("Could not verify which document"); sentetik tetikleme attach probe ile.
+
 ## Agent kurulum günlüğü (issue #6 teşhis kanalı)
 
 `MacTextKeys.install()` adımları (native-dialog-keys, shortcuts, option-chars,
