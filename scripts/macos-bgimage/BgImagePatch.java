@@ -51,9 +51,13 @@ public class BgImagePatch {
                 }
             }
         });
-        if (sites[0] == 0) {
-            System.err.println("[BgImagePatch] at içinde beklenen drawImage çağrısı bulunamadı.");
-            System.exit(1);
+        if (sites[0] != 1) {
+            // Tam olarak TEK çağrı beklenir (5.4.17–5.4.21'de doğrulandı). Farklıysa satıcı
+            // at'ı değiştirmiştir: hiçbir şey yazma, çağıran yamayı atlasın (çıkış kodu 3).
+            // System.out: ude-win-x64 ile eş (orada stderr PowerShell 5.1 build'ini durdurabilir).
+            System.out.println("[BgImagePatch] at içinde 1 drawImage çağrısı bekleniyordu, bulunan: "
+                + sites[0] + "; yama uygulanmadı.");
+            System.exit(3);
         }
 
         byte[] code = at.toBytecode();

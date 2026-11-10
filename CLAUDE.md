@@ -1170,7 +1170,16 @@ bicubic) ölçeklenir ve `(kaynak kimliği, cihaz w×h)` anahtarlı önbellekten
 hazır olana dek stok (en yakın komşu) çizim, hazır olunca pencereler repaint. Sürekli
 zoom'da kuyrukta bayatlayan istekler üretilmeden düşer. Bütçe 24 M piksel (~96 MB),
 tek girdi ≤16 M piksel; son 2 sn'de kullanılan girdi tahliye edilmez (çok pencere
-ping-pong'u). Ekran DIŞI hedefler (yazıcı, BufferedImage) eski tek seferlik bicubic.
+ping-pong'u). Hedefe göre üç yol: **ekran yüzeyi** (`TYPE_RASTER_SCREEN`) yukarıdaki
+eşzamansız önbellek; **bellek-içi görüntü** (`TYPE_IMAGE_BUFFER` — yazılım arka tamponu
+ya da görüntüye dışa aktarım) ölçeklemeyi çağıran iş parçacığında bir kez yapıp
+önbellekler, önbelleklenemiyorsa tek seferlik bicubic; **yazıcı** (`PrinterGraphics`/
+`TYPE_PRINTER`) eski tek seferlik bicubic. Bellek-içi yol Windows portunda şart çıktı
+(D3D kapalıyken Swing arka tamponu `TYPE_IMAGE_BUFFER` bildirir); `BgPaint.java`
+ude-win-x64 `scripts/bgimage/` kopyasıyla EŞ tutulur, tek fark günlük yolu. Mac'te
+canlı doğrulandı: ekran yolu aynı hızda, `comp.paint(BufferedImage)` ilk boyamada
+kaliteli zemin basıyor. `BgImagePatch` tam 1 çağrı yeri ister; farklıysa çıkış kodu 3 →
+`apply_bgimage` uyarıp helper'ı geri alır.
 IMGFULL/PASTEIMG'deki `at` sarmaları KALDIRILDI (eski sarma ipucunu boyamanın kalanına
 da sızdırıyordu; BgPaint `g.create()` kopyasında çalışır, sızıntı yok).
 

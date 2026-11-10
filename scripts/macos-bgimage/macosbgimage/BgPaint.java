@@ -12,6 +12,7 @@ import java.awt.Window;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.ImageObserver;
+import java.awt.print.PrinterGraphics;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
@@ -32,10 +33,16 @@ import java.util.concurrent.Executors;
  * döngüsüne düşer) → her tuş vuruşu/kaydırma ~100 ms (ölçüm: 4,5 ms → 116 ms).
  *
  * Çözüm: kaliteli ölçeklemeyi boyama başına DEĞİL, (kaynak, cihaz boyutu) başına
- * BİR KEZ ve arka plan iş parçacığında yap; sonuç önbellekten 1:1 kopyalanır.
- * Önbellek hazır değilken stok (en yakın komşu) çizim kullanılır, hazır olunca
- * pencereler yeniden boyanır. Ekran dışı hedefler (yazıcı, BufferedImage) eski
- * davranışla — tek seferlik bicubic — çizilir.
+ * BİR KEZ yap; sonuç önbellekten 1:1 kopyalanır. Hedefe göre üç yol:
+ *   - ekran yüzeyi: ölçekleme arka plan iş parçacığında; hazır olana dek stok (en
+ *     yakın komşu) çizim, hazır olunca pencereler yeniden boyanır;
+ *   - bellek-içi görüntü (Swing'in yazılım arka tamponu — hızlandırılmış yüzey
+ *     yokken — ya da görüntüye dışa aktarım): ölçekleme çağıran iş parçacığında
+ *     bir kez, sonra önbellek; ilk ve tek boyamada da kaliteli sonuç;
+ *   - yazıcı: eski davranış, tek seferlik bicubic.
+ *
+ * Bu dosya ude-win-x64 deposundaki scripts/bgimage/macosbgimage/BgPaint.java ile
+ * EŞ tutulur; tek fark günlük dosyasının yoludur.
  *
  * Teşhis: UDE_BGLOG=1 → ~/Library/Logs/ude-bgimage.txt
  */
@@ -53,6 +60,7 @@ public final class BgPaint {
         final WeakReference<BufferedImage> src;
         final int w, h;
         BufferedImage img;      // null = üretim bekliyor
+        boolean building;       // bir iş parçacığı şu an ölçekliyor
         long lastUsed;
         Entry(BufferedImage s, int w, int h) {
             this.src = new WeakReference<BufferedImage>(s);
@@ -73,11 +81,11 @@ public final class BgPaint {
             if (g instanceof Graphics2D && img instanceof BufferedImage && w > 0 && h > 0) {
                 Graphics2D g2 = (Graphics2D) g;
                 BufferedImage src = (BufferedImage) img;
-                GraphicsConfiguration gc = g2.getDeviceConfiguration();
-                if (!isScreen(gc)) {
+                int type = deviceType(g2);
+                if (g2 instanceof PrinterGraphics || type == GraphicsDevice.TYPE_PRINTER) {
                     return drawHinted(g2, src, x, y, w, h, obs, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
                 }
-                return drawCached(g2, src, x, y, w, h, obs, true);
+                return drawCached(g2, src, x, y, w, h, obs, type == GraphicsDevice.TYPE_RASTER_SCREEN);
             }
         } catch (Throwable t) {
             logError(t);
@@ -86,8 +94,9 @@ public final class BgPaint {
     }
 
     /**
-     * Önbellekli çizim. async=false yalnız testler içindir (ölçekleme çağıran iş
-     * parçacığında, anında).
+     * Önbellekli çizim. async=true (ekran): ölçekleme arka planda, hazır olana dek
+     * stok çizim. async=false (bellek-içi hedef): ölçekleme çağıran iş parçacığında;
+     * önbelleklenemiyorsa (döndürme, aşırı büyük hedef, bütçe dolu) tek seferlik bicubic.
      *
      * Cihaz ölçeği Graphics2D.getTransform()'dan DEĞİL FontRenderContext'ten okunur:
      * Retina'da pencere yüzeyine doğrudan çizimde getTransform() 2x'i GİZLER, Swing
@@ -99,7 +108,7 @@ public final class BgPaint {
                               ImageObserver obs, boolean async) {
         int[] d = deviceSize(g2.getFontRenderContext().getTransform(), w, h);
         if (d == null) {
-            return g2.drawImage(src, x, y, w, h, obs);
+            return drawUncached(g2, src, x, y, w, h, obs, async);
         }
         if (d[0] == src.getWidth() && d[1] == src.getHeight()) {
             return drawHinted(g2, src, x, y, w, h, obs, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
@@ -116,13 +125,25 @@ public final class BgPaint {
         if (scaled != null) {
             return drawHinted(g2, scaled, x, y, w, h, obs, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         }
-        return g2.drawImage(src, x, y, w, h, obs);
+        return drawUncached(g2, src, x, y, w, h, obs, async);
     }
 
-    static boolean isScreen(GraphicsConfiguration gc) {
-        if (gc == null) return false;
-        GraphicsDevice dev = gc.getDevice();
-        return dev != null && dev.getType() == GraphicsDevice.TYPE_RASTER_SCREEN;
+    /** Önbellek yokken: ekranda stok (hızlı) çizim, bellek-içi hedefte tek seferlik bicubic. */
+    private static boolean drawUncached(Graphics2D g2, BufferedImage src, int x, int y, int w, int h,
+                                        ImageObserver obs, boolean screen) {
+        if (screen) return g2.drawImage(src, x, y, w, h, obs);
+        return drawHinted(g2, src, x, y, w, h, obs, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+    }
+
+    /** GraphicsDevice.TYPE_* ya da bilinmiyorsa -1 (bellek-içi hedef gibi ele alınır). */
+    static int deviceType(Graphics2D g2) {
+        try {
+            GraphicsConfiguration gc = g2.getDeviceConfiguration();
+            GraphicsDevice dev = gc == null ? null : gc.getDevice();
+            return dev == null ? -1 : dev.getType();
+        } catch (RuntimeException e) {
+            return -1;
+        }
     }
 
     /** Hedef dikdörtgenin cihaz pikseli boyutu; önbelleğe uygun değilse null. */
@@ -132,7 +153,9 @@ public final class BgPaint {
         if ((tx.getType() & ~simple) != 0) return null;
         double sx = tx.getScaleX(), sy = tx.getScaleY();
         if (!(sx > 0) || !(sy > 0)) return null;
-        long dw = Math.round(w * sx), dh = Math.round(h * sy);
+        double fw = w * sx, fh = h * sy;
+        if (!(fw < MAX_ENTRY_PIXELS) || !(fh < MAX_ENTRY_PIXELS)) return null;
+        long dw = Math.round(fw), dh = Math.round(fh);
         if (dw < 1 || dh < 1 || dw * dh > MAX_ENTRY_PIXELS) return null;
         return new int[] { (int) dw, (int) dh };
     }
@@ -204,19 +227,25 @@ public final class BgPaint {
     }
 
     private static void build(Entry e, boolean async) {
-        try {
-            BufferedImage src;
-            synchronized (LOCK) {
-                src = e.src.get();
-                // Sürekli zoom: kuyrukta bayatlamış istekleri üretmeden düşür.
-                if (src == null || (async && e != latest) || !CACHE.contains(e)) {
-                    CACHE.remove(e);
-                    return;
-                }
+        BufferedImage src;
+        synchronized (LOCK) {
+            // Hazır ya da başka iş parçacığında üretiliyor: dokunma (eşzamanlı ekran +
+            // bellek-içi istekleri aynı girdiyi iki kez üretmesin, hazır olanı düşürmesin).
+            if (e.img != null || e.building) return;
+            src = e.src.get();
+            // Sürekli zoom: kuyrukta bayatlamış istekleri üretmeden düşür.
+            if (src == null || (async && e != latest) || !CACHE.contains(e)) {
+                CACHE.remove(e);
+                if (latest == e) latest = null;
+                return;
             }
+            e.building = true;
+        }
+        try {
             long t0 = System.nanoTime();
             BufferedImage out = scale(src, e.w, e.h);
             synchronized (LOCK) {
+                e.building = false;
                 if (!CACHE.contains(e)) return;
                 e.img = out;
                 e.lastUsed = System.nanoTime();
@@ -231,7 +260,7 @@ public final class BgPaint {
                 });
             }
         } catch (Throwable t) {
-            synchronized (LOCK) { CACHE.remove(e); }
+            synchronized (LOCK) { e.building = false; CACHE.remove(e); }
             logError(t);
         }
     }
