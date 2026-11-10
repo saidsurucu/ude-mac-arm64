@@ -51,6 +51,7 @@ LINESPACING_SRC="$SCRIPT_DIR/macos-linespacing" # native satır aralığı menü
 IMGFIX_SRC="$SCRIPT_DIR/macos-imagefix" # okunamayan görselde uyarı + eklenen görseli sayfaya sığdırma
 BUFREAD_SRC="$SCRIPT_DIR/macos-bufread" # belge bayt önbelleği (common.ac) tamponlu okuma — büyük UDF açılış donması
 ZEMBEREK_SRC="$SCRIPT_DIR/macos-zemberek" # yazım denetimi kapalıyken Zemberek sözlüğünü açılışta yükleme
+BGIMG_SRC="$SCRIPT_DIR/macos-bgimage" # sayfa arka plan resmi (antet) önbellekli hızlı çizim
 FOP_SUP="/System/Library/Fonts/Supplemental"   # macOS Arial/Times New Roman (tam Unicode)
 ICONS="${ICONS:-1}"           # 1=açık (varsayılan; modern ikon override + HiDPI yükleyici yaması) | 0=kapalı
 FOPFONTS="${FOPFONTS:-1}"     # 1=açık (varsayılan; PDF Türkçe harf düzeltmesi) | 0=kapalı
@@ -69,6 +70,7 @@ PDFFRESH="${PDFFRESH:-1}" # 1=açık (varsayılan; "PDF Olarak Kaydet" canlı be
 LINESPACING="${LINESPACING:-1}" # 1=açık (varsayılan; Giriş>Paragraf satır aralığı menüsüne 1.5 eklenir — satıcı unutmuş) | 0=kapalı
 IMGFIX="${IMGFIX:-1}" # 1=açık (varsayılan; okunamayan görselde Türkçe uyarı + eklenen görsel sayfaya sığar) | 0=kapalı
 BUFREAD="${BUFREAD:-1}" # 1=açık (varsayılan; büyük UDF açılışında bayt-bayt okuma donması giderilir) | 0=kapalı
+BGIMG="${BGIMG:-1}" # 1=açık (varsayılan; arka plan resmi/antet bir kez ölçeklenip önbellekten çizilir — her tuşta ~100 ms bicubic kalkar) | 0=kapalı
 ZEMBEREKLAZY="${ZEMBEREKLAZY:-1}" # 1=açık (varsayılan; Kelime Denetimi kapalıyken açılışta ~0,4 s Zemberek yüklemesi atlanır + sağ tık önerisi paylaşılan sözlüğü kullanır) | 0=kapalı
 
 APP_NAME="Uyap Doküman Editörü"     # görünen ad
@@ -742,6 +744,41 @@ apply_imagefix() {  # $1=JAR — patch_jar içinden çağrılır (apply_imageful
 	c_ok "[imagefix] görsel ekleme yaması uygulandı."
 }
 
+apply_bgimage() {  # $1=JAR — patch_jar içinden çağrılır
+	local JAR="$1"
+	[ "$BGIMG" = "1" ] || return 0
+	# İdempotans: helper zaten enjekte edilmişse atla (grep -q DEĞİL — SIGPIPE/pipefail tuzağı).
+	if unzip -l "$JAR" 2>/dev/null | grep 'macosbgimage/BgPaint.class' >/dev/null 2>&1; then
+		c_ok "[bgimage] zaten yamalı, atlandı."; return 0
+	fi
+	c_info "[bgimage] sayfa arka plan resmi (antet) önbellekli çizim yaması…"
+	local jr jc jvs
+	jr="$(java17)"  || { c_warn "[bgimage] 17+ java yok, yama atlandı."; return 0; }
+	jc="$(javac17)" || { c_warn "[bgimage] 17+ javac yok, yama atlandı."; return 0; }
+	jvs="$(icon_deps)"   # Javassist (diğer yamalarla ortak)
+	# 1) helper'ı derle + jar'a enjekte et (patcher'dan ÖNCE; Javassist köprü ifadesi
+	#    macosbgimage.BgPaint'i jar classpath'inden çözer)
+	rm -rf "$BUILD/_bgimghelper"; mkdir -p "$BUILD/_bgimghelper"
+	"$jc" --release 11 -encoding UTF-8 -d "$BUILD/_bgimghelper" \
+		"$BGIMG_SRC/macosbgimage/BgPaint.java" \
+		|| { c_warn "[bgimage] helper derlenemedi; yama atlandı."; return 0; }
+	( cd "$BUILD/_bgimghelper" && zip -q -r "$JAR" macosbgimage )
+	# 2) patcher'ı derle + çalıştır + çıktıyı jar'a enjekte et
+	rm -rf "$BUILD/_bgimgpatch"; mkdir -p "$BUILD/_bgimgpatch/out"
+	"$jc" --release 11 -encoding UTF-8 -cp "$jvs" -d "$BUILD/_bgimgpatch" "$BGIMG_SRC/BgImagePatch.java" \
+		|| { zip -q -d "$JAR" 'macosbgimage/*' >/dev/null 2>&1 || true
+		     c_warn "[bgimage] BgImagePatch derlenemedi; yama atlandı."; return 0; }
+	if ! "$jr" -cp "$BUILD/_bgimgpatch:$jvs" BgImagePatch "$JAR" "$BUILD/_bgimgpatch/out" \
+		|| [ ! -d "$BUILD/_bgimgpatch/out/tr" ]; then
+		# Yarım-yama bırakma: helper'ı geri çıkar ki idempotans kontrolü yanılmasın.
+		zip -q -d "$JAR" 'macosbgimage/*' >/dev/null 2>&1 || true
+		c_warn "[bgimage] yama uygulanamadı (UDE sürümü değişmiş olabilir); yama geri alındı."
+		return 0
+	fi
+	( cd "$BUILD/_bgimgpatch/out" && zip -q -r "$JAR" tr )
+	c_ok "[bgimage] arka plan resmi önbellekli çizim yaması uygulandı."
+}
+
 apply_pasteimage() {  # $1=JAR — patch_jar içinden çağrılır
 	local JAR="$1"
 	[ "$PASTEIMG" = "1" ] || return 0
@@ -1052,6 +1089,7 @@ patch_jar() {
 	apply_imagefull "$JAR"
 	apply_imagefix "$JAR"
 	apply_pasteimage "$JAR"
+	apply_bgimage "$JAR"
 	apply_pasterich "$JAR"
 	apply_plainpaste "$JAR"
 	apply_zemberek "$JAR"
@@ -1248,6 +1286,9 @@ Ortam: UDE_ALLOW_ANY_JDK (1=makinedeki her Java 11 kabul edilir; varsayılan 0 �
        IMGFIX (1=açık varsayılan | 0=kapalı; okunamayan görselde — HEIC/WEBP,
                  bozuk dosya — sessiz başarısızlık yerine Türkçe uyarı, ayrıca
                  eklenen görselin görünen boyutu sayfaya sığdırılır)
+       BGIMG (1=açık varsayılan | 0=kapalı; sayfa arka plan resmi/antet bir kez
+                 ölçeklenip önbellekten çizilir — antetli belgede yazma ve
+                 kaydırma takılmaz)
        SKIN (1=açık varsayılan | 0=kapalı; modern düz Substance skin + Flamingo
                  şerit + font + nötr kanvas; macOS koyu görünümde koyu tema)
        LIVETOGGLE (1=açık varsayılan | 0=kapalı; Otomatik Büyük Harf / Baş
@@ -1273,6 +1314,7 @@ case "${1:-all}" in
 	line-spacing) LINESPACING=1 apply_linespacing "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-full) IMGFULL=1 apply_imagefull "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	image-fix) IMGFIX=1 apply_imagefix "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
+	bg-image) BGIMG=1 apply_bgimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-image) apply_pasteimage "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	paste-rich) apply_pasterich "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;
 	plain-paste) apply_plainpaste "$SRC_APP_DIR/app/Contents/Java/editor-app.jar" ;;

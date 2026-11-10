@@ -30,10 +30,8 @@ import java.io.FileOutputStream;
  *      görüntüsü 510x331'e iner, Retina'da 2x büyütülünce aşırı bulanık).
  *      Passthrough yapılır: görünen boyut (float w,h) aynı kalır, bitmap tam
  *      çözünürlükte gömülür (IMGFULL utils.h.a düzeltmesinin paste-yolu ikizi).
- *   4) KALİTE (best-effort): görünüm wp.b.at'ın drawImage çağrısına BICUBIC
- *      interpolation hint — tam çözünürlüklü bitmap ekranda küçültülürken
- *      keskin çizilir. IMGFULL=1 zaten uyguladıysa (RenderingHints referansı
- *      varsa) atlanır.
+ * (Eski 4. adım — wp.b.at.drawImage'a BICUBIC ipucu — kaldırıldı: o çağrı sayfa
+ * ARKA PLAN resmiymiş ve antetli belgeleri yavaşlatıyordu; bkz. scripts/macos-bgimage.)
  * Kontrol akışı (metin önceliği, görünen boyut hesabı, dosya dalı) değişmez.
  *
  * ÖN KOŞUL: macospasteimage/Conv.class bu patcher çalışmadan ÖNCE jar'a
@@ -99,42 +97,6 @@ public class PasteImagePatch {
             + fitSkipped[0] + " yıkıcı sığdırma passthrough.");
         if (fitSkipped[0] == 0) {
             System.out.println("[PasteImagePatch] UYARI: aa.a sığdırma çağrısı bulunamadı; imaj küçültülmüş gömülür (bulanıklık).");
-        }
-
-        // --- 4) at.drawImage BICUBIC hint (best-effort; IMGFULL uyguladıysa atla) ---
-        try {
-            CtClass at = pool.get("tr.com.havelsan.uyap.system.swing.wp.b.at");
-            if (at.getRefClasses().contains("java.awt.RenderingHints")) {
-                System.out.println("[PasteImagePatch] at zaten interpolation hint içeriyor (IMGFULL?); bicubic atlandı.");
-            } else {
-                final boolean[] hinted = { false };
-                at.instrument(new ExprEditor() {
-                    public void edit(MethodCall m) throws CannotCompileException {
-                        if (m.getMethodName().equals("drawImage")
-                                && m.getSignature().equals("(Ljava/awt/Image;IIIILjava/awt/image/ImageObserver;)Z")) {
-                            m.replace(
-                                "{ if ($0 instanceof java.awt.Graphics2D) {"
-                              + "    java.awt.Graphics2D g2 = (java.awt.Graphics2D)$0;"
-                              + "    Object __old = g2.getRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION);"
-                              + "    g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,"
-                              + "        java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);"
-                              + "    $_ = $proceed($$);"
-                              + "    if (__old != null) g2.setRenderingHint("
-                              + "        java.awt.RenderingHints.KEY_INTERPOLATION, __old);"
-                              + "  } else { $_ = $proceed($$); } }");
-                            hinted[0] = true;
-                        }
-                    }
-                });
-                if (hinted[0]) {
-                    writeClass(at, outDir);
-                    System.out.println("[PasteImagePatch] at.drawImage BICUBIC hint yaması uygulandı.");
-                } else {
-                    System.out.println("[PasteImagePatch] UYARI: at içinde beklenen drawImage çağrısı bulunamadı; bicubic atlandı.");
-                }
-            }
-        } catch (Throwable t) {
-            System.out.println("[PasteImagePatch] UYARI: at bicubic yaması atlandı: " + t);
         }
     }
 

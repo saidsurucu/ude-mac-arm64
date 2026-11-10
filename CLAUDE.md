@@ -1136,6 +1136,59 @@ ile sürülüp **yalnız UDE penceresi** `screencapture -l<winID>` ile yakaland�
 ve düzeltme piksel üstünde görüldü). Testler: `tests/ImageFitTest.java`,
 `tests/ImageLoadMessageTest.java` (javac+java elle; başlıkta komutlar).
 
+## Arka plan resmi (antet) yavaşlığı (BGIMG=1, 2026-11)
+
+Kullanıcı raporu: "antetimi JPG/PNG arka plan olarak yükleyince UDE çok yavaşlıyor".
+KÖK NEDEN **bizim regresyonumuz**: IMGFULL (ve yedeği PASTEIMG 4. adım)
+`wp.b.at` içindeki `drawImage(Image,x,y,w,h,obs)` çağrısına BICUBIC ipucu koyuyordu,
+"satır-içi imaj keskinliği" sanılarak. O çağrı satır-içi imaj DEĞİL — `at.a(Graphics,
+Rectangle,int)` sayfa zeminini boyar ve içindeki TEK drawImage belgenin **arka plan
+resmidir** (`ar.a()`; satır-içi imajlar `at`'tan hiç geçmez). macOS OpenGL hattında
+bicubic hızlandırılmaz (`OGLDrawImage.renderImageXform` yazılıma düşer) → görünür
+sayfa alanı HER boyamada işlemcide yeniden ölçeklenir. Ölçüm (A4 300 dpi antet, Retina,
+1280×597 görünür alan; aynı süreçte `at` redefine A/B):
+
+| | antetsiz | antet + bicubic (eski) | antet + stok `at` | antet + BgPaint |
+|---|---|---|---|---|
+| tam boyama | 2,5–4,5 ms | 92–116 ms | 4,5 ms | 2,3–3,3 ms |
+| tuş vuruşu (insertString + dirty paint) | 5–9 ms | 98–100 ms | 10,4 ms | 4,5–6,2 ms |
+| 60 px kaydırma | 3–5 ms | 91–99 ms | 5,4 ms | 2,6–4,9 ms |
+
+(BgPaint sütunu paketlenmiş build'de, JPG ve RGBA PNG antetle, medyanlar. Önbellek
+üretimi 1530×2270 → 1533×2166 için ~0,3 sn, EDT dışında.)
+
+Arka plan zinciri: `lo.s()` → `new wp.prof.d.g(img, 1026)` → `ar.a(o)` →
+`g.a(PageFormat)` resmi BİR KEZ imageable×3 boyutuna (A4: 1530×2270) bilinear ölçekler
+ve `ar` alanında tutar; `at` bunu her boyamada sayfa dikdörtgenine (595×841 pt ×
+zoom × Retina) çizer. `lo.s()` kenar boşlukları (`DocumentEx.b/c/d/e` String) null ise
+`Integer.parseInt` istisnasıyla SESSİZCE hiçbir şey kurmaz (probe'da boşlukları da set et).
+
+**Çözüm** (`scripts/macos-bgimage/`, `apply_bgimage`, `apply_pasteimage`'dan sonra):
+`at`'taki çağrı `macosbgimage.BgPaint.draw($0,$$)`'a yönlenir. Ekran hedefinde resim
+cihaz piksel boyutuna **bir kez**, arka plan iş parçacığında (kademeli yarılama +
+bicubic) ölçeklenir ve `(kaynak kimliği, cihaz w×h)` anahtarlı önbellekten 1:1 çizilir;
+hazır olana dek stok (en yakın komşu) çizim, hazır olunca pencereler repaint. Sürekli
+zoom'da kuyrukta bayatlayan istekler üretilmeden düşer. Bütçe 24 M piksel (~96 MB),
+tek girdi ≤16 M piksel; son 2 sn'de kullanılan girdi tahliye edilmez (çok pencere
+ping-pong'u). Ekran DIŞI hedefler (yazıcı, BufferedImage) eski tek seferlik bicubic.
+IMGFULL/PASTEIMG'deki `at` sarmaları KALDIRILDI (eski sarma ipucunu boyamanın kalanına
+da sızdırıyordu; BgPaint `g.create()` kopyasında çalışır, sızıntı yok).
+
+- **KRİTİK — cihaz ölçeği `getTransform()`'dan okunmaz:** Swing arka tamponunda
+  `getTransform()` Retina 2x'i GÖSTERİR (canlı: 2,576 = 2 × zoom), pencere yüzeyine
+  doğrudan çizimde GİZLER; `GraphicsConfiguration.getDefaultTransform()` ile çarpmak
+  ilk denemede 2x'i iki kez saydı (3065×4333 önbellek). Doğrusu
+  `g2.getFontRenderContext().getTransform()` — iki durumda da gerçek kullanıcı→cihaz
+  ölçeği.
+- Teşhis: `UDE_BGLOG=1` → `~/Library/Logs/ude-bgimage.txt` (istek/üretim süresi/tahliye).
+  Test: `tests/BgPaintTest.java` (headless; başlıkta komutlar).
+- Ölçüm deseni (yeniden kullanılabilir): attach probe EDT'de `paintImmediately(visibleRect)`
+  + `Toolkit.sync()` ×25 medyan; tuş vuruşu = `insertString` + `RepaintManager.
+  validateInvalidComponents()/paintDirtyRegions()`; A/B için agent manifest'ine
+  `Can-Redefine-Classes: true` koyup `Instrumentation.redefineClasses` ile `at`'ı stok/
+  yamalı sürümle AYNI süreçte değiştir (helper sınıfları agent jar'ına koy). Makine yük
+  altındayken (swap) mutlak süreler çöp olur — `uptime`'a bak, min/medyan kullan.
+
 ## Satır aralığı 1.5 (LINESPACING=1, 2026-07)
 
 UDE'nin Giriş>Paragraf bandındaki NATIVE satır-aralığı popup'ı
