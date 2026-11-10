@@ -104,6 +104,28 @@ public final class BgPaintTest {
         check("saydam kaynak: saydam bolgede zemin", out.getRGB(160, 100) == Color.WHITE.getRGB());
         g.dispose();
 
+        // --- bellek-içi hedef (yazılım arka tamponu / dışa aktarım): önbellek dolana
+        //     dek beklemez, İLK çizimde de kaliteli sonuç; önbelleklenemeyen hedef yine çizilir ---
+        BgPaint.clear();
+        check("BufferedImage hedefi ekran sayilmaz",
+            BgPaint.deviceType(out.createGraphics()) != java.awt.GraphicsDevice.TYPE_RASTER_SCREEN);
+        out = canvas(400, 500);
+        g = out.createGraphics();
+        g.scale(2, 2);
+        BgPaint.draw(g, src, 10, 20, 100, 150, null);
+        check("bellek-ici hedef: ilk cizimde onbellek hazir", BgPaint.lookup(src, 200, 300) != null);
+        check("bellek-ici hedef: piksel dogru", out.getRGB(60, 190) == Color.RED.getRGB()
+            && out.getRGB(180, 190) == Color.BLUE.getRGB());
+        g.dispose();
+        BgPaint.clear();
+        out = canvas(400, 500);
+        g = out.createGraphics();
+        g.rotate(Math.PI / 2, 200, 200);
+        BgPaint.draw(g, src, 150, 150, 100, 100, null);
+        check("dondurulmus hedef onbelleksiz ama cizilir",
+            BgPaint.cacheSize() == 0 && out.getRGB(200, 200) != Color.WHITE.getRGB());
+        g.dispose();
+
         // --- büyük küçültme: kademeli yarılama doğru boyut ve ortalama renk verir ---
         BufferedImage big = source(2480, 3508, BufferedImage.TYPE_INT_RGB);
         BufferedImage small = BgPaint.scale(big, 300, 424);
@@ -112,6 +134,7 @@ public final class BgPaintTest {
             && small.getRGB(270, 200) == Color.BLUE.getRGB());
 
         // --- bütçe: yakın zamanda kullanılan girdiler tahliye edilmez, yenisi reddedilir ---
+        long until;
         BgPaint.clear();
         BufferedImage s1 = source(10, 10, BufferedImage.TYPE_INT_RGB);
         BufferedImage s2 = source(10, 10, BufferedImage.TYPE_INT_RGB);
@@ -123,6 +146,51 @@ public final class BgPaintTest {
         check("butce: ayni anahtar yeniden istenince ayni girdi",
             BgPaint.request(s1, 4000, 3000, false) != null && BgPaint.cacheSize() == 2);
 
+        check("sonsuz/NaN olcek onbelleklenmez",
+            BgPaint.deviceSize(AffineTransform.getScaleInstance(Double.POSITIVE_INFINITY, 1), 100, 50) == null
+            && BgPaint.deviceSize(AffineTransform.getScaleInstance(1e300, 1e300), 100, 50) == null);
+
+        // --- bütçe doluyken bellek-içi hedef: önbellek reddeder ama çizim (bicubic) yapılır ---
+        out = canvas(400, 500);
+        g = out.createGraphics();
+        g.scale(2, 2);
+        BgPaint.draw(g, src, 10, 20, 100, 150, null);
+        check("butce doluyken de cizilir", BgPaint.lookup(src, 200, 300) == null
+            && out.getRGB(60, 190) == Color.RED.getRGB() && out.getRGB(180, 190) == Color.BLUE.getRGB());
+        g.dispose();
+
+        // --- karışık yarış: aynı girdi önce ekran (async) sonra bellek-içi (sync) istenir,
+        //     ardından başka bir boyut "en güncel" olur; kuyrukta bekleyen eski görev hazır
+        //     girdiyi DÜŞÜRMEMELİ, aynı girdi iki iş parçacığında birden üretilmemeli ---
+        BgPaint.clear();
+        BufferedImage mixed = source(1200, 1200, BufferedImage.TYPE_INT_RGB);
+        // İşçiyi kilitle ki 900 görevi kuyrukta BEKLESİN: ölçekleyici kaynağın
+        // saydamlığını sorarken test izin verene dek bekler (zamanlamaya bağlı değil).
+        final java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        BufferedImage busy = new BufferedImage(64, 64, BufferedImage.TYPE_INT_RGB) {
+            @Override public int getTransparency() {
+                started.countDown();
+                try { release.await(); } catch (InterruptedException ignore) { }
+                return super.getTransparency();
+            }
+        };
+        BgPaint.request(busy, 32, 32, true);
+        check("karisik yaris: isci mesgul",
+            started.await(10, java.util.concurrent.TimeUnit.SECONDS));
+        BgPaint.request(mixed, 900, 900, true);
+        out = canvas(900, 900);
+        g = out.createGraphics();
+        BgPaint.drawCached(g, mixed, 0, 0, 900, 900, null, false);
+        g.dispose();
+        check("karisik yaris: bellek-ici cizim her durumda boyar", out.getRGB(100, 450) == Color.RED.getRGB());
+        BgPaint.request(mixed, 901, 901, true);
+        release.countDown();
+        until = System.currentTimeMillis() + 20_000;
+        while (BgPaint.lookup(mixed, 901, 901) == null && System.currentTimeMillis() < until) Thread.sleep(20);
+        check("karisik yaris: sonraki istek uretildi", BgPaint.lookup(mixed, 901, 901) != null);
+        check("karisik yaris: hazir girdi kuyruktaki gorevce dusurulmedi", BgPaint.lookup(mixed, 900, 900) != null);
+
         // --- eşzamansız yol: ilk çizim stok düşer, girdi arka planda hazırlanır ---
         BgPaint.clear();
         out = canvas(400, 500);
@@ -130,7 +198,7 @@ public final class BgPaintTest {
         g.scale(2, 2);
         check("async ilk cizim true doner", BgPaint.drawCached(g, src, 0, 0, 100, 150, null, true));
         check("async ilk cizim de ekrana bir sey basar", out.getRGB(40, 150) == Color.RED.getRGB());
-        long until = System.currentTimeMillis() + 10_000;
+        until = System.currentTimeMillis() + 10_000;
         while (BgPaint.lookup(src, 200, 300) == null && System.currentTimeMillis() < until) Thread.sleep(20);
         check("async girdi arka planda hazirlandi", BgPaint.lookup(src, 200, 300) != null);
         g.dispose();
