@@ -310,6 +310,15 @@ Resmî paket x86_64. Native arm64 için:
     olduğunda yüklenir; seçeneği çalışırken açmak eskisi gibi çalışır. Ayrıca sağ tık yazım
     önerileri her seferinde sözlüğü sıfırdan kurmak yerine ortak sözlüğü kullanır.
 
+23. **Antetli belgede takılmayan yazım** (`BGIMG=1`, varsayılan açık) → Belgeye arka plan
+    resmi (antet; JPG/PNG) eklendiğinde yazarken ve kaydırırken uygulama belirgin biçimde
+    ağırlaşıyordu. Neden bu derlemenin kendi eski bir yamasıydı: arka plan resmi **her
+    ekran boyamasında** yeniden, yüksek kaliteli (bicubic) ölçekleniyordu ve macOS'ta bu
+    işlem ekran kartına değil işlemciye düşüyor. Artık resim ekrandaki boyutuna **bir kez**
+    ölçeklenip önbellekten çizilir; görüntü kalitesi aynı kalır. Ölçüm (A4 300 dpi antet,
+    Retina): tuş vuruşu başına süre **~100 ms'den ~5 ms'ye** iner (antetsiz belgeyle
+    aynı düzey). Yakınlaştırma değişince resim kısa bir an kaba görünür, ardından netleşir.
+
 > Not: macOS codesign, `.app` adındaki Türkçe karakterlerle imzayı bozuyor; bu yüzden
 > executable ASCII (`UyapDokumanEditoru`) tutulur, görünen ad sonradan Türkçe yapılır.
 
