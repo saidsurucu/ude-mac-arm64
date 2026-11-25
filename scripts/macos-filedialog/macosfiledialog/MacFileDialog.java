@@ -144,6 +144,43 @@ public final class MacFileDialog {
         return (sel != null) ? sel.filter : null;
     }
 
+    /** Format penceresi kapandıktan sonra native panel açılmadan önce beklenen süre. */
+    static final int AFTER_PROMPT_DELAY_MS = 300;
+
+    /**
+     * Bu süreden kısa sürede iptal dönen panel kullanıcıya hiç görünmemiş sayılır
+     * (insan tepki süresinin altında) ve bir kez yeniden açılır.
+     */
+    static final long PHANTOM_CANCEL_MS = 600;
+
+    /**
+     * EDT'yi kilitlemeden ms kadar bekler: EDT'deyse SecondaryLoop ile olay
+     * kuyruğu pompalanmaya devam eder (çizim/girdi işler), değilse uyunur.
+     * Neden: "Kaydetme Biçimi" JOptionPane'i kapandıktan HEMEN sonra açılan
+     * NSSavePanel, önceki modal oturumun sonlanması bitmeden runModal'a girer ve
+     * ~200 ms içinde ekranda görünmeden iptal döner (Farklı Kaydet "hiçbir şey
+     * olmuyor"). Arada olay pompalamak modal oturumun temiz kapanmasını sağlar.
+     */
+    static void pumpEvents(int ms) {
+        try {
+            if (!java.awt.EventQueue.isDispatchThread()) {
+                Thread.sleep(ms);
+                return;
+            }
+            final java.awt.SecondaryLoop loop = java.awt.Toolkit.getDefaultToolkit()
+                .getSystemEventQueue().createSecondaryLoop();
+            javax.swing.Timer t = new javax.swing.Timer(ms, new java.awt.event.ActionListener() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) { loop.exit(); }
+            });
+            t.setRepeats(false);
+            t.start();
+            if (!loop.enter()) {
+                t.stop();
+                Thread.sleep(ms);
+            }
+        } catch (Throwable ignore) {}
+    }
+
     private static void log(String m) {
         if (!"1".equals(System.getProperty("macosfiledialog.debug"))) return;
         try (PrintStream p = new PrintStream(new FileOutputStream("/tmp/macos-filedialog.log", true), true, "UTF-8")) {
@@ -279,6 +316,9 @@ public final class MacFileDialog {
                         return JFileChooser.CANCEL_OPTION;
                     }
                     targetExt = probeExtension(chosenFilter);
+                    // Biçim penceresinin modal oturumu tam kapanmadan panel açılırsa
+                    // panel görünmeden iptal döner (bkz. pumpEvents).
+                    pumpEvents(AFTER_PROMPT_DELAY_MS);
                 } else if (real.size() == 1) {
                     targetExt = probeExtension(real.get(0));
                 }
@@ -306,7 +346,20 @@ public final class MacFileDialog {
                 // .udf dışı dosyalar (rtf/xml/usf) gizleniyordu; NSSavePanel'de FilenameFilter
                 // isim alanını bozuyordu. Format/uzantı mantığı UDE'nin kendi JFileChooser
                 // durumunda kalır; LOAD'da seçim sonrası eşleşen filtre ayarlanır (aşağıda).
+                String preFile = fd.getFile();
+                String preDir = fd.getDirectory();
+                long t0 = System.currentTimeMillis();
                 fd.setVisible(true);
+                long took = System.currentTimeMillis() - t0;
+                if (fd.getFile() == null && took < PHANTOM_CANCEL_MS) {
+                    // Güvenlik ağı: panel insan tepkisinden hızlı iptal döndüyse
+                    // kullanıcı onu hiç görmemiştir — bir kez daha aç.
+                    log("panel " + took + " ms'de iptal döndü; yeniden açılıyor (mode=" + mode + ")");
+                    pumpEvents(400);
+                    if (preDir != null) fd.setDirectory(preDir);
+                    if (preFile != null) fd.setFile(preFile);
+                    fd.setVisible(true);
+                }
             } finally {
                 if (dirMode) {
                     if (prevDirProp == null) System.clearProperty("apple.awt.fileDialogForDirectories");
