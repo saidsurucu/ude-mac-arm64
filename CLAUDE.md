@@ -1291,6 +1291,17 @@ ve `kCGWindowLayer` (panel 8'de ve üstte kalmalı). TEXTKEYS bayrağına bağl�
 (dylib yoksa düzeltme de yok). Not: computer-use bu Java penceresinde tıklamayı
 reddediyor ("Could not verify which document"); sentetik tetikleme attach probe ile.
 
+**İkinci kusur — hayalet iptal (2026-11, kullanıcı raporu + ölçüm):** panel genişletilmiş
+hâldeyken (`…ExpandedStateForSaveMode=1`) bile Farklı Kaydet hiçbir pencere açmıyordu.
+"Kaydetme Biçimi" JOptionPane'i kapandıktan HEMEN sonra açılan `FileDialog` ~200 ms'de,
+ekranda görünmeden `null` dönüyor (önceki modal oturumun sonlanması yeni `runModal`'ı
+iptal ediyor; log'da yalnız `iptal (mode=1)`, `format penceresi iptal` DEĞİL). JOptionPane
+olmadan aynı panel normal; araya 300 ms olay pompalamak düzeltiyor. **Çözüm**
+(`MacFileDialog`): format seçiminden sonra `pumpEvents(300)` (EDT'de `SecondaryLoop` —
+UI donmaz) + güvenlik ağı: panel `PHANTOM_CANCEL_MS`=600 ms'den kısa sürede iptal dönerse
+ön-doldurulmuş ad/dizin geri yüklenip BİR KEZ yeniden açılır (log: `panel N ms'de iptal
+döndü`). Yarış makineye/zamanlamaya bağlı — geliştirici makinesinde görülmedi.
+
 ## Agent kurulum günlüğü (issue #6 teşhis kanalı)
 
 `MacTextKeys.install()` adımları (native-dialog-keys, shortcuts, option-chars,
